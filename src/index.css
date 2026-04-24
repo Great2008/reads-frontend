@@ -1,0 +1,67 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  * {
+    -webkit-tap-highlight-color: transparent;
+    box-sizing: border-box;
+  }
+
+  html, body, #root {
+    height: 100%;
+    overflow-x: hidden;
+  }
+
+  body {
+    font-family: 'DM Sans', ui-sans-serif, system-ui, sans-serif;
+    background-color: #F5F0E8;
+    color: #0D1F3C;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+
+  /* Scrollbar styles */
+  ::-webkit-scrollbar { width: 4px; height: 4px; }
+  ::-webkit-scrollbar-track { background: transparent; }
+  ::-webkit-scrollbar-thumb { background: #D4A017; border-radius: 2px; }
+}
+
+@layer components {
+  .reads-card {
+    @apply bg-white rounded-2xl shadow-reads-card border border-gray-100;
+  }
+
+  .reads-btn-primary {
+    @apply bg-reads-green text-white font-bold rounded-xl py-3 px-6 
+           active:scale-95 transition-all duration-150 shadow-reads-green
+           disabled:opacity-50 disabled:cursor-not-allowed;
+  }
+
+  .reads-btn-gold {
+    @apply bg-reads-gold text-reads-navy font-bold rounded-xl py-3 px-6 
+           active:scale-95 transition-all duration-150 shadow-reads-gold
+           disabled:opacity-50 disabled:cursor-not-allowed;
+  }
+
+  .reads-btn-outline {
+    @apply border-2 border-reads-green text-reads-green font-bold rounded-xl py-3 px-6 
+           active:scale-95 transition-all duration-150
+           disabled:opacity-50 disabled:cursor-not-allowed;
+  }
+
+  .reads-input {
+    @apply w-full bg-white border-2 border-gray-200 rounded-xl px-4 py-3
+           text-reads-navy placeholder-reads-muted-light font-sans
+           focus:outline-none focus:border-reads-gold transition-colors;
+  }
+
+  .reads-label {
+    @apply block text-reads-navy font-semibold text-sm mb-1.5;
+  }
+
+  .token-badge {
+    @apply inline-flex items-center gap-1 bg-reads-gold/10 text-reads-gold-mid 
+           font-bold text-xs rounded-full px-2.5 py-1;
+  }
+}
