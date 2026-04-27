@@ -455,6 +455,9 @@ export const partner = {
   },
   getFees: () => get('/partner/school/fees'),
   getSessions: () => get('/partner/school/sessions'),
+  getClasses: () => get('/partner/school/classes'),
+  createClass: (data) => post('/partner/school/classes', data),
+  deleteClass: (class_id) => del(`/partner/school/classes/${class_id}`),
 };
 
 // ── Tutor Portal ──────────────────────────────────────────────────────────────
