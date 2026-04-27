@@ -135,6 +135,7 @@ export const auth = {
 
 // ── Students ──────────────────────────────────────────────────────────────────
 export const students = {
+  lookupSchool: (code) => get(`/students/school/lookup?code=${encodeURIComponent(code)}`, false),
   enroll: (school_code, class_id) => post('/students/enroll', { school_code, class_id }),
   unenroll: () => post('/students/unenroll', {}),
   getTracks: () => get('/students/tracks'),

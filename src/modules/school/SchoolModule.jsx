@@ -10,6 +10,7 @@ import { LoadingOverlay, EmptyState, Badge, Modal, Toast, SectionHeader } from '
 // ── Join School Flow ───────────────────────────────────────────────────────────
 function JoinSchoolFlow({ onJoined, onClose }) {
   const [schoolCode, setSchoolCode] = useState('');
+  const [schoolInfo, setSchoolInfo] = useState(null);
   const [classes, setClasses] = useState([]);
   const [selectedClass, setSelectedClass] = useState('');
   const [step, setStep] = useState(1); // 1=code, 2=class
@@ -20,11 +21,12 @@ function JoinSchoolFlow({ onJoined, onClose }) {
     if (!schoolCode.trim()) return setError('Enter a school code.');
     setLoading(true); setError('');
     try {
-      const data = await api.school.getClasses();
+      const data = await api.students.lookupSchool(schoolCode.trim().toUpperCase());
+      setSchoolInfo(data);
       setClasses(data?.classes || []);
       setStep(2);
     } catch (e) {
-      setError(e.message || 'School not found.');
+      setError('School not found. Check the code and try again.');
     } finally { setLoading(false); }
   };
 
@@ -62,8 +64,17 @@ function JoinSchoolFlow({ onJoined, onClose }) {
         </div>
       ) : (
         <div className="space-y-4">
+          {schoolInfo && (
+            <div className="reads-card p-3 bg-reads-green-bg border border-reads-green">
+              <p className="font-bold text-reads-navy text-sm">{schoolInfo.name}</p>
+              <p className="text-reads-muted text-xs">{schoolInfo.address}</p>
+            </div>
+          )}
           <p className="text-reads-muted text-sm">Select your class:</p>
           <div className="space-y-2 max-h-56 overflow-y-auto">
+            {classes.length === 0 && (
+              <p className="text-reads-muted text-sm text-center py-4">No classes set up yet. You can still enroll.</p>
+            )}
             {classes.map((cls) => (
               <button key={cls.id} onClick={() => setSelectedClass(cls.id)}
                 className={`w-full text-left px-4 py-3 rounded-xl border-2 transition-all ${
@@ -74,7 +85,7 @@ function JoinSchoolFlow({ onJoined, onClose }) {
             ))}
           </div>
           {error && <p className="text-reads-red text-sm">{error}</p>}
-          <button onClick={enroll} disabled={loading || !selectedClass}
+          <button onClick={enroll} disabled={loading || (classes.length > 0 && !selectedClass)}
             className="reads-btn-primary w-full flex items-center justify-center gap-2">
             {loading && <Loader2 size={18} className="animate-spin" />}
             Enroll in School
