@@ -125,7 +125,7 @@ export const TokenBadge = ({ amount, size = 'sm' }) => {
   const px = size === 'lg' ? 'px-3 py-1.5' : 'px-2 py-0.5';
   return (
     <span className={`inline-flex items-center gap-1 bg-reads-gold/10 text-reads-gold-dark font-bold rounded-full ${px} ${text}`}>
-     <img src="/assets/reads-logo.png" alt="READS" className="w-3.5 h-3.5 object-contain" />
+     <img src="public/assets/reads-logo.png" alt="READS" className="w-3.5 h-3.5 object-contain" />
       {typeof amount === 'number' ? amount.toLocaleString() : amount} $READS
     </span>
   );
