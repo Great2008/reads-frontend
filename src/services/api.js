@@ -473,7 +473,17 @@ export const tutorPortal = {
 };
 
 // ── Single export ──────────────────────────────────────────────────────────────
+const BASE = (import.meta.env.VITE_API_URL || 'https://reads-backend-unld.onrender.com') + '/api';
+const getToken = () => typeof localStorage !== 'undefined' ? localStorage.getItem('reads_token') : null;
+const authHeaders = () => ({ 'Authorization': `Bearer ${getToken()}`, 'Content-Type': 'application/json' });
+
 export const api = {
+  get: (path) => fetch(BASE + path, { headers: authHeaders() }).then(r => r.json()),
+  post: (path, body) => fetch(BASE + path, { method: 'POST', headers: authHeaders(), body: JSON.stringify(body) }).then(r => r.json()),
+  patch: (path, body) => fetch(BASE + path, { method: 'PATCH', headers: authHeaders(), body: JSON.stringify(body) }).then(r => r.json()),
+  del: (path) => fetch(BASE + path, { method: 'DELETE', headers: { 'Authorization': `Bearer ${getToken()}` } }).then(r => r.json()),
+  upload: (path, formData) => fetch(BASE + path, { method: 'POST', headers: { 'Authorization': `Bearer ${getToken()}` }, body: formData }).then(r => r.json()),
+  ...
   auth,
   students,
   notifications,
