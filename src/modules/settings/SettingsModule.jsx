@@ -113,11 +113,11 @@ export default function SettingsModule() {
         />
         <SettingRow icon={Info} iconBg="bg-gray-100" iconColor="text-reads-muted"
           label="Privacy Policy"
-          onClick={() => window.open('https://readstechnet.vercel.app/privacy', '_blank')}
+          onClick={() => window.open('https://readstechnet.vercel.app/privacy-policy.html', '_blank')}
         />
         <SettingRow icon={Info} iconBg="bg-gray-100" iconColor="text-reads-muted"
           label="Terms of Service"
-          onClick={() => window.open('https://readstechnet.vercel.app/terms', '_blank')}
+          onClick={() => window.open('https://readstechnet.vercel.app/terms-of-service.html', '_blank')}
         />
       </SettingSection>
 
