@@ -2,6 +2,7 @@
 // Shared UI Components for $READS
 // ─────────────────────────────────────────────────────────────────────────────
 import { Loader2, AlertCircle, CheckCircle, Info, XCircle, X } from 'lucide-react';
+
 // ── Spinner ───────────────────────────────────────────────────────────────────
 export const Spinner = ({ size = 20, className = '' }) => (
   <Loader2 size={size} className={`animate-spin text-reads-green ${className}`} />
@@ -125,7 +126,7 @@ export const TokenBadge = ({ amount, size = 'sm' }) => {
   const px = size === 'lg' ? 'px-3 py-1.5' : 'px-2 py-0.5';
   return (
     <span className={`inline-flex items-center gap-1 bg-reads-gold/10 text-reads-gold-dark font-bold rounded-full ${px} ${text}`}>
-     <img src="public/assets/reads-logo.png" alt="READS" className="w-3.5 h-3.5 object-contain" />
+      <span className="text-reads-gold">₿</span>
       {typeof amount === 'number' ? amount.toLocaleString() : amount} $READS
     </span>
   );

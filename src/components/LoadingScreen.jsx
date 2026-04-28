@@ -31,7 +31,7 @@ export default function LoadingScreen() {
             style={{ animationDirection: 'reverse', animationDuration: '1.2s' }}
           />
           <div className="w-20 h-20 bg-reads-navy rounded-2xl flex items-center justify-center shadow-reads-card">
-            <img src="public/assets/reads-logo.png" alt="READS" className="w-3.5 h-3.5 object-contain" />
+            <span className="font-display font-black text-reads-gold text-3xl">₿</span>
           </div>
         </div>
 
