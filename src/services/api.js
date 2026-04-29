@@ -4,7 +4,7 @@
 // Auth: JWT in localStorage — Authorization: Bearer <token>
 // ─────────────────────────────────────────────────────────────────────────────
 
-const API_URL = (import.meta.env.VITE_API_URL || 'https://reads-backend-unld.onrender.com') + '/api';
+const API_URL = (import.meta.env.VITE_API_URL || '') + '/api';
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -65,6 +65,17 @@ const post = (path, body, auth = true)  => req('POST',   path, body, auth);
 const put  = (path, body, auth = true)  => req('PUT',    path, body, auth);
 const patch = (path, body, auth = true) => req('PATCH',  path, body, auth);
 const del  = (path, auth = true)        => req('DELETE', path, null, auth);
+
+const upload = async (path, formData, auth = true) => {
+  const headers = {};
+  if (auth) {
+    const token = localStorage.getItem('reads_token') || localStorage.getItem('access_token');
+    if (token) headers['Authorization'] = `Bearer ${token}`;
+  }
+  const res = await fetch(`${API_URL}${path}`, { method: 'POST', headers, body: formData });
+  if (!res.ok) await handleError(res, `UPLOAD ${path}`);
+  return res.json();
+};
 
 // ── Auth ──────────────────────────────────────────────────────────────────────
 export const auth = {
@@ -135,7 +146,6 @@ export const auth = {
 
 // ── Students ──────────────────────────────────────────────────────────────────
 export const students = {
-  lookupSchool: (code) => get(`/students/school/lookup?code=${encodeURIComponent(code)}`, false),
   enroll: (school_code, class_id) => post('/students/enroll', { school_code, class_id }),
   unenroll: () => post('/students/unenroll', {}),
   getTracks: () => get('/students/tracks'),
@@ -455,9 +465,13 @@ export const partner = {
   },
   getFees: () => get('/partner/school/fees'),
   getSessions: () => get('/partner/school/sessions'),
+
+  // Classes
   getClasses: () => get('/partner/school/classes'),
   createClass: (data) => post('/partner/school/classes', data),
   deleteClass: (class_id) => del(`/partner/school/classes/${class_id}`),
+
+  // CBT Centre
   getCbtProfile: () => get('/partner/cbt/profile'),
   getCbtStats: () => get('/partner/cbt/stats'),
   updateCbtProfile: (data) => patch('/partner/cbt/profile', data),
@@ -475,8 +489,16 @@ export const tutorPortal = {
   getEarnings: () => get('/tutor/earnings'),
 };
 
-// ── Single default export (bundles all modules) ───────────────────────────────
+// ── Single export ──────────────────────────────────────────────────────────────
 export const api = {
+  // Base HTTP methods (used by SchoolPortalModule and other modules directly)
+  get,
+  post,
+  patch,
+  del,
+  upload,
+
+  // Feature modules
   auth,
   students,
   notifications,
