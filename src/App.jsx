@@ -27,6 +27,7 @@ import AITutorModule        from './modules/ai-tutor/AITutorModule.jsx';
 import ChallengesModule     from './modules/challenges/ChallengesModule.jsx';
 import AdminModule          from './modules/admin/AdminModule.jsx';
 import PartnerModule        from './modules/partner/PartnerModule.jsx';
+import CbtModule           from './modules/partner/CbtModule.jsx';
 
 // ─────────────────────────────────────────────
 // "More" tile grid
@@ -152,8 +153,12 @@ export default function App() {
   const handleLoginSuccess = async () => {
     const userData = await api.auth.me();
     if (!userData) { handleLogout(); return; }
+
+    // For partners and staff, skip heavy stats fetch
+    const isPartner = userData.account_type === 'partner' || userData.account_type === 'school_staff';
+
     const [stats, balance, notifData] = await Promise.allSettled([
-      api.profile.getStats(),
+      isPartner ? Promise.resolve({}) : api.profile.getStats(),
       api.wallet.getBalance(),
       api.notifications.getUnreadCount(),
     ]);
@@ -179,7 +184,7 @@ export default function App() {
   // Session restore
   useEffect(() => {
     const restore = async () => {
-      const token = localStorage.getItem('access_token');
+      const token = localStorage.getItem('reads_token') || localStorage.getItem('access_token');
       if (token) {
         await handleLoginSuccess();
       } else {
@@ -209,8 +214,12 @@ export default function App() {
   }
 
   // ── Partner portal ──────────────────────────────────────────────────────────
-  if (user.account_type === 'partner') {
-    return <PartnerModule onLogout={handleLogout} />;
+  if (user.account_type === 'partner' || user.account_type === 'school_staff') {
+    if (user.role === 'cbt_partner') {
+      return <CbtModule user={user} onLogout={handleLogout} />;
+    }
+    // school_partner, school_staff
+    return <PartnerModule user={user} onLogout={handleLogout} />;
   }
 
   // ── AI Tutor — full-screen (no top/bottom bar) ──────────────────────────────

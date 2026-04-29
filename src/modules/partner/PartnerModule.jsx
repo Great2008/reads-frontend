@@ -238,7 +238,7 @@ const NAV_ITEMS = [
 ];
 
 // ── Main Partner Module ───────────────────────────────────────────────────────
-export default function PartnerModule({ onLogout }) {
+export default function PartnerModule({ user, onLogout }) {
   const [section, setSection] = useState('overview');
   const [stats, setStats] = useState({});
   const [profile, setProfile] = useState(null);

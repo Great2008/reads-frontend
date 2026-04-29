@@ -11,7 +11,7 @@ const API_URL = (import.meta.env.VITE_API_URL || 'https://reads-backend-unld.onr
 const getHeaders = (auth = true) => {
   const headers = { 'Content-Type': 'application/json' };
   if (auth) {
-    const token = localStorage.getItem('access_token');
+    const token = localStorage.getItem('reads_token') || localStorage.getItem('access_token');
     if (token) headers['Authorization'] = `Bearer ${token}`;
   }
   return headers;
@@ -106,7 +106,7 @@ export const auth = {
 
   /** Get current user profile. */
   me: async () => {
-    const token = localStorage.getItem('access_token');
+    const token = localStorage.getItem('reads_token') || localStorage.getItem('access_token');
     if (!token) return null;
     try {
       return await get('/auth/me');
@@ -458,6 +458,9 @@ export const partner = {
   getClasses: () => get('/partner/school/classes'),
   createClass: (data) => post('/partner/school/classes', data),
   deleteClass: (class_id) => del(`/partner/school/classes/${class_id}`),
+  getCbtProfile: () => get('/partner/cbt/profile'),
+  getCbtStats: () => get('/partner/cbt/stats'),
+  updateCbtProfile: (data) => patch('/partner/cbt/profile', data),
 };
 
 // ── Tutor Portal ──────────────────────────────────────────────────────────────
