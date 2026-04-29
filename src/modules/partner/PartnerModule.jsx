@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import {
   LayoutDashboard, Users, BookOpen, ClipboardList, Wallet,
   Settings, UserPlus, Upload, Download, ChevronRight,
-  School, Loader2, ArrowLeft, CheckCircle, XCircle, Edit2, Trash2
+  School, Loader2, ArrowLeft, CheckCircle, XCircle, Edit2, Trash2, GraduationCap, Plus
 } from 'lucide-react';
 import { api } from '../../services/api.js';
 import SchoolPortalModule from './SchoolPortalModule.jsx';
@@ -14,10 +14,10 @@ function Overview({ stats, onNavigate }) {
     <div className="px-4 pt-2 pb-4 space-y-5 animate-fade-in">
       <SectionHeader title="Dashboard" subtitle="Partner overview" />
       <div className="grid grid-cols-2 gap-3">
-        <StatCard icon={Users} label="Total Students" value={stats.total_students ?? 0} color="green" onClick={() => onNavigate('students')} />
-        <StatCard icon={BookOpen} label="Active Lessons" value={stats.active_lessons ?? 0} color="navy" onClick={() => onNavigate('lessons')} />
-        <StatCard icon={Wallet} label="Token Balance" value={(stats.token_balance ?? 0).toLocaleString()} color="gold" onClick={() => onNavigate('wallet')} />
-        <StatCard icon={ClipboardList} label="Pending Fees" value={stats.pending_fees ?? 0} color="red" onClick={() => onNavigate('fees')} />
+        <StatCard icon={Users} label="Students" value={stats.total_students ?? 0} color="green" onClick={() => onNavigate('students')} />
+        <StatCard icon={UserPlus} label="Staff" value={stats.total_staff ?? 0} color="navy" onClick={() => onNavigate('staff')} />
+        <StatCard icon={GraduationCap} label="Classes" value={stats.total_classes ?? 0} color="gold" onClick={() => onNavigate('classes')} />
+        <StatCard icon={BookOpen} label="School Portal" value="Manage →" color="red" onClick={() => onNavigate('portal')} />
       </div>
     </div>
   );
@@ -229,11 +229,86 @@ function PartnerWalletSection() {
   );
 }
 
+
+// ── Classes Section ───────────────────────────────────────────────────────────
+function ClassesSection() {
+  const [classes, setClasses] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [newName, setNewName] = useState('');
+  const [saving, setSaving] = useState(false);
+  const [toast, setToast] = useState(null);
+  const showToast = (msg, type = 'success') => { setToast({ msg, type }); setTimeout(() => setToast(null), 3000); };
+
+  const loadClasses = () => {
+    api.partner.getClasses()
+      .then((d) => setClasses(d?.classes || []))
+      .catch(() => {})
+      .finally(() => setLoading(false));
+  };
+  useEffect(() => { loadClasses(); }, []);
+
+  const handleAdd = async () => {
+    if (!newName.trim()) return;
+    setSaving(true);
+    try {
+      await api.partner.createClass({ name: newName.trim() });
+      showToast(`Class '${newName}' created`);
+      setNewName('');
+      loadClasses();
+    } catch (e) { showToast(e.message || 'Failed', 'error'); }
+    finally { setSaving(false); }
+  };
+
+  const handleDelete = async (classId, name) => {
+    if (!confirm(`Delete class '${name}'?`)) return;
+    try { await api.partner.deleteClass(classId); showToast('Deleted'); loadClasses(); }
+    catch (e) { showToast(e.message || 'Failed', 'error'); }
+  };
+
+  if (loading) return <LoadingOverlay />;
+
+  return (
+    <div className="px-4 pt-2 pb-4 animate-fade-in">
+      <SectionHeader title="Classes" subtitle={`${classes.length} class${classes.length !== 1 ? 'es' : ''}`} />
+      <div className="flex gap-2 mb-4">
+        <input className="reads-input flex-1" placeholder="e.g. JSS 1, SS2, Year 3"
+          value={newName} onChange={(e) => setNewName(e.target.value)}
+          onKeyDown={(e) => e.key === 'Enter' && handleAdd()} />
+        <button onClick={handleAdd} disabled={saving || !newName.trim()}
+          className="reads-btn-primary px-4 flex items-center gap-1.5">
+          {saving ? <Loader2 size={16} className="animate-spin" /> : <Plus size={16} />} Add
+        </button>
+      </div>
+      {classes.length === 0 ? (
+        <EmptyState icon={GraduationCap} title="No classes yet"
+          description="Add classes so students can select their class when joining your school." />
+      ) : (
+        <div className="space-y-2">
+          {classes.map((cls) => (
+            <div key={cls.id} className="flex items-center gap-3 reads-card px-4 py-3">
+              <div className="w-10 h-10 bg-reads-green-bg rounded-xl flex items-center justify-center flex-shrink-0">
+                <GraduationCap size={18} className="text-reads-green" />
+              </div>
+              <p className="flex-1 font-bold text-reads-navy text-sm">{cls.name}</p>
+              <button onClick={() => handleDelete(cls.id, cls.name)} className="text-reads-muted hover:text-reads-red transition-colors">
+                <Trash2 size={16} />
+              </button>
+            </div>
+          ))}
+        </div>
+      )}
+      {toast && <Toast message={toast.msg} type={toast.type} onClose={() => setToast(null)} />}
+    </div>
+  );
+}
+
 // ── Nav items ─────────────────────────────────────────────────────────────────
 const NAV_ITEMS = [
   { key: 'overview',  label: 'Overview',  icon: LayoutDashboard },
   { key: 'students',  label: 'Students',  icon: Users },
   { key: 'staff',     label: 'Staff',     icon: UserPlus },
+  { key: 'classes',   label: 'Classes',   icon: GraduationCap },
+  { key: 'portal',    label: 'Portal',    icon: BookOpen },
   { key: 'wallet',    label: 'Wallet',    icon: Wallet },
 ];
 
@@ -276,6 +351,8 @@ export default function PartnerModule({ user, onLogout }) {
         {section === 'overview' && <Overview stats={stats} onNavigate={setSection} />}
         {section === 'students' && <StudentsSection />}
         {section === 'staff' && <StaffSection />}
+        {section === 'classes' && <ClassesSection />}
+        {section === 'portal' && <SchoolPortalModule onBack={() => setSection('overview')} />}
         {section === 'wallet' && <PartnerWalletSection />}
       </main>
 
