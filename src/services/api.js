@@ -468,9 +468,24 @@ export const tutorPortal = {
   setAvailability: (data) => post('/tutor/availability', data),
   getEarnings: () => get('/tutor/earnings'),
 };
-
+const upload = async (path, formData) => {
+  const token = localStorage.getItem('reads_token') || localStorage.getItem('access_token');
+  const headers = {};
+  if (token) headers['Authorization'] = `Bearer ${token}`;
+  const res = await fetch(`${API_URL}${path}`, { method: 'POST', headers, body: formData });
+  if (!res.ok) await handleError(res, `UPLOAD ${path}`);
+  return res.json();
+};
 // ── Single export ──────────────────────────────────────────────────────────────
 export const api = {
+  // Base HTTP methods
+  get,
+  post,
+  patch,
+  del,
+  upload,
+
+  // Modules
   auth,
   students,
   notifications,
