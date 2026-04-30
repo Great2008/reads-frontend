@@ -27,7 +27,6 @@ import AITutorModule        from './modules/ai-tutor/AITutorModule.jsx';
 import ChallengesModule     from './modules/challenges/ChallengesModule.jsx';
 import AdminModule          from './modules/admin/AdminModule.jsx';
 import PartnerModule        from './modules/partner/PartnerModule.jsx';
-import CbtModule           from './modules/partner/CbtModule.jsx';
 
 // ─────────────────────────────────────────────
 // "More" tile grid
@@ -115,7 +114,7 @@ const TopBar = ({ unreadCount, onBell }) => (
     <div className="max-w-lg mx-auto px-4 py-3 flex items-center justify-between">
       <div className="flex items-center gap-2">
         <div className="w-8 h-8 bg-reads-navy rounded-xl flex items-center justify-center">
-          <span className="font-display font-black text-reads-gold text-sm">₿</span>
+          <img src="/assets/reads-logo.png" alt="$READS" className="w-6 h-6 object-contain" />
         </div>
         <span className="font-display font-black text-reads-navy text-base">$READS</span>
       </div>
@@ -153,12 +152,8 @@ export default function App() {
   const handleLoginSuccess = async () => {
     const userData = await api.auth.me();
     if (!userData) { handleLogout(); return; }
-
-    // For partners and staff, skip heavy stats fetch
-    const isPartner = userData.account_type === 'partner' || userData.account_type === 'school_staff';
-
     const [stats, balance, notifData] = await Promise.allSettled([
-      isPartner ? Promise.resolve({}) : api.profile.getStats(),
+      api.profile.getStats(),
       api.wallet.getBalance(),
       api.notifications.getUnreadCount(),
     ]);
@@ -184,7 +179,7 @@ export default function App() {
   // Session restore
   useEffect(() => {
     const restore = async () => {
-      const token = localStorage.getItem('reads_token') || localStorage.getItem('access_token');
+      const token = localStorage.getItem('access_token');
       if (token) {
         await handleLoginSuccess();
       } else {
@@ -214,12 +209,8 @@ export default function App() {
   }
 
   // ── Partner portal ──────────────────────────────────────────────────────────
-  if (user.account_type === 'partner' || user.account_type === 'school_staff') {
-    if (user.role === 'cbt_partner') {
-      return <CbtModule user={user} onLogout={handleLogout} />;
-    }
-    // school_partner, school_staff
-    return <PartnerModule user={user} onLogout={handleLogout} />;
+  if (user.account_type === 'partner') {
+    return <PartnerModule onLogout={handleLogout} />;
   }
 
   // ── AI Tutor — full-screen (no top/bottom bar) ──────────────────────────────

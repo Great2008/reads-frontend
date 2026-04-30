@@ -175,7 +175,7 @@ export default function CbtModule({ user, onLogout }) {
         <div className="max-w-lg mx-auto px-4 py-3 flex items-center justify-between">
           <div className="flex items-center gap-2">
             <div className="w-8 h-8 bg-reads-navy rounded-xl flex items-center justify-center">
-              <span className="font-display font-black text-reads-gold text-sm">₿</span>
+              <img src="/assets/reads-logo.png" alt="$READS" className="w-6 h-6 object-contain" />
             </div>
             <div>
               <p className="font-black text-reads-navy text-sm leading-tight">$READS</p>

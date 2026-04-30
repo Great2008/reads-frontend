@@ -33,7 +33,7 @@ export default function ResetPasswordPage() {
 
         <div className="flex justify-center mb-8">
           <div className="w-16 h-16 bg-reads-navy rounded-2xl flex items-center justify-center shadow-reads-card">
-            <span className="font-display font-black text-reads-gold text-2xl">₿</span>
+            <img src="/assets/reads-logo.png" alt="$READS" className="w-8 h-8 object-contain" />
           </div>
         </div>
 

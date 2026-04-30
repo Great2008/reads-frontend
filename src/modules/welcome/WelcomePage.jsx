@@ -38,7 +38,7 @@ export default function WelcomePage({ onGetStarted }) {
           <div className="flex justify-center mb-4">
             <div className="relative">
               <div className="w-24 h-24 bg-reads-navy rounded-3xl flex items-center justify-center shadow-reads-card">
-                <span className="font-display font-black text-reads-gold text-4xl">₿</span>
+                <img src="/assets/reads-logo.png" alt="$READS" className="w-16 h-16 object-contain" />
               </div>
               {/* Floating coin */}
               <div className="absolute -top-2 -right-2 w-8 h-8 bg-reads-gold rounded-full flex items-center justify-center shadow-reads-gold animate-bounce">

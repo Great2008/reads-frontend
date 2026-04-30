@@ -507,7 +507,7 @@ export default function AuthModule({ onLoginSuccess }) {
         {/* Logo */}
         <div className="flex flex-col items-center gap-1 mb-10">
           <div className="w-16 h-16 bg-reads-navy rounded-2xl flex items-center justify-center shadow-reads-card mb-2">
-            <span className="font-display font-black text-reads-gold text-2xl">₿</span>
+            <img src="/assets/reads-logo.png" alt="$READS" className="w-8 h-8 object-contain" />
           </div>
           <p className="font-display font-black text-reads-navy text-xl">$READS</p>
           <p className="text-reads-muted text-xs tracking-wider uppercase">Learn · Earn · Excel</p>
