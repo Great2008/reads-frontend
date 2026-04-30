@@ -31,13 +31,12 @@ function JoinSchoolFlow({ onJoined, onClose }) {
   };
 
   const enroll = async () => {
-    if (!selectedClass) return setError('Select a class.');
     setLoading(true); setError('');
     try {
-      await api.students.enroll(schoolCode.trim().toUpperCase(), selectedClass);
+      await api.students.enroll(schoolCode.trim().toUpperCase(), selectedClass || null);
       onJoined();
     } catch (e) {
-      setError(e.message);
+      setError(e.message || 'Enrollment failed.');
     } finally { setLoading(false); }
   };
 
@@ -65,25 +64,28 @@ function JoinSchoolFlow({ onJoined, onClose }) {
       ) : (
         <div className="space-y-4">
           {schoolInfo && (
-            <div className="reads-card p-3 bg-reads-green-bg border border-reads-green">
-              <p className="font-bold text-reads-navy text-sm">{schoolInfo.name}</p>
-              <p className="text-reads-muted text-xs">{schoolInfo.address}</p>
+            <div className="reads-card p-3 border-l-4 border-reads-green bg-reads-green-bg">
+              <p className="font-black text-reads-navy text-sm">{schoolInfo.name}</p>
+              {schoolInfo.address && <p className="text-reads-muted text-xs">{schoolInfo.address}</p>}
             </div>
           )}
-          <p className="text-reads-muted text-sm">Select your class:</p>
-          <div className="space-y-2 max-h-56 overflow-y-auto">
-            {classes.length === 0 && (
-              <p className="text-reads-muted text-sm text-center py-4">No classes set up yet. You can still enroll.</p>
-            )}
-            {classes.map((cls) => (
-              <button key={cls.id} onClick={() => setSelectedClass(cls.id)}
-                className={`w-full text-left px-4 py-3 rounded-xl border-2 transition-all ${
-                  selectedClass === cls.id ? 'border-reads-green bg-reads-green-bg' : 'border-gray-100 bg-white'
-                }`}>
-                <p className="font-semibold text-reads-navy text-sm">{cls.name}</p>
-              </button>
-            ))}
-          </div>
+          {classes.length > 0 ? (
+            <>
+              <p className="text-reads-muted text-sm">Select your class:</p>
+              <div className="space-y-2 max-h-56 overflow-y-auto">
+                {classes.map((cls) => (
+                  <button key={cls.id} onClick={() => setSelectedClass(cls.id)}
+                    className={`w-full text-left px-4 py-3 rounded-xl border-2 transition-all ${
+                      selectedClass === cls.id ? 'border-reads-green bg-reads-green-bg' : 'border-gray-100 bg-white'
+                    }`}>
+                    <p className="font-semibold text-reads-navy text-sm">{cls.name}</p>
+                  </button>
+                ))}
+              </div>
+            </>
+          ) : (
+            <p className="text-reads-muted text-sm text-center py-2">No classes set up yet — you can still enroll.</p>
+          )}
           {error && <p className="text-reads-red text-sm">{error}</p>}
           <button onClick={enroll} disabled={loading || (classes.length > 0 && !selectedClass)}
             className="reads-btn-primary w-full flex items-center justify-center gap-2">
