@@ -167,7 +167,7 @@ export const school = {
   removeStaff: (staff_id) => del(`/school/staff/${staff_id}`),
 
   // Classes & Subjects
-  getClasses: () => get('/school/classes'),
+  getClasses: () => get('/partner/school/classes'),
   getSubjects: (class_id) => get(`/school/classes/${class_id}/subjects`),
   addSubject: (class_id, data) => post(`/school/classes/${class_id}/subjects`, data),
   removeSubject: (subject_id) => del(`/school/subjects/${subject_id}`),
@@ -455,6 +455,16 @@ export const partner = {
   },
   getFees: () => get('/partner/school/fees'),
   getSessions: () => get('/partner/school/sessions'),
+
+  // Classes
+  getClasses: () => get('/partner/school/classes'),
+  createClass: (data) => post('/partner/school/classes', data),
+  deleteClass: (class_id) => del(`/partner/school/classes/${class_id}`),
+
+  // CBT Centre
+  getCbtProfile: () => get('/partner/cbt/profile'),
+  getCbtStats: () => get('/partner/cbt/stats'),
+  updateCbtProfile: (data) => patch('/partner/cbt/profile', data),
 };
 
 // ── Tutor Portal ──────────────────────────────────────────────────────────────
