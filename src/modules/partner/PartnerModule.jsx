@@ -331,47 +331,52 @@ export default function PartnerModule({ user, onLogout }) {
 
   return (
     <div className="min-h-screen bg-gray-50 font-sans">
-      {/* Top bar */}
-      <div className="fixed top-0 left-0 right-0 z-40 bg-white border-b border-gray-100 shadow-sm">
-        <div className="max-w-lg mx-auto px-4 py-3 flex items-center justify-between">
-          <div className="flex items-center gap-2">
-            <div className="w-8 h-8 bg-reads-navy rounded-lg flex items-center justify-center">
-              <School size={16} className="text-reads-gold" />
-            </div>
-            <div>
-              <p className="font-bold text-reads-navy text-sm">{profile?.name || 'Partner Portal'}</p>
-              <p className="text-reads-muted text-xs">{profile?.school_code || ''}</p>
+      {/* Portal renders full-screen, replacing header/nav */}
+      {section === 'portal' ? (
+        <SchoolPortalModule onBack={() => setSection('overview')} />
+      ) : (
+        <>
+          {/* Top bar */}
+          <div className="fixed top-0 left-0 right-0 z-40 bg-white border-b border-gray-100 shadow-sm">
+            <div className="max-w-lg mx-auto px-4 py-3 flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <div className="w-8 h-8 bg-reads-navy rounded-lg flex items-center justify-center">
+                  <School size={16} className="text-reads-gold" />
+                </div>
+                <div>
+                  <p className="font-bold text-reads-navy text-sm">{profile?.name || 'Partner Portal'}</p>
+                  <p className="text-reads-muted text-xs">{profile?.school_code || ''}</p>
+                </div>
+              </div>
+              <button onClick={onLogout} className="text-reads-muted text-xs font-semibold">Log out</button>
             </div>
           </div>
-          <button onClick={onLogout} className="text-reads-muted text-xs font-semibold">Log out</button>
-        </div>
-      </div>
 
-      {/* Content */}
-      <main className="max-w-lg mx-auto pt-14 pb-24 min-h-screen">
-        {section === 'overview' && <Overview stats={stats} onNavigate={setSection} />}
-        {section === 'students' && <StudentsSection />}
-        {section === 'staff' && <StaffSection />}
-        {section === 'classes' && <ClassesSection />}
-        {section === 'wallet' && <PartnerWalletSection />}
-      </main>
+          {/* Content */}
+          <main className="max-w-lg mx-auto pt-14 pb-24 min-h-screen">
+            {section === 'overview' && <Overview stats={stats} onNavigate={setSection} />}
+            {section === 'students' && <StudentsSection />}
+            {section === 'staff' && <StaffSection />}
+            {section === 'classes' && <ClassesSection />}
+            {section === 'wallet' && <PartnerWalletSection />}
+          </main>
 
-      {/* Bottom nav */}
-      <nav className="fixed bottom-0 left-0 right-0 z-50 bg-white border-t border-gray-100 shadow-[0_-2px_12px_rgba(0,0,0,0.06)]">
-        <div className="max-w-lg mx-auto flex items-center justify-around px-2">
-          {NAV_ITEMS.map(({ key, label, icon: Icon }) => {
-            const active = section === key;
-            return (
-              <button key={key} onClick={() => setSection(key)}
-                className="flex flex-col items-center gap-1 py-3 px-4 min-w-[60px]">
-                <Icon size={22} className={active ? 'text-reads-green' : 'text-reads-muted'} strokeWidth={active ? 2.5 : 1.8} />
-                <span className={`text-[10px] font-semibold ${active ? 'text-reads-green' : 'text-reads-muted'}`}>{label}</span>
-              </button>
-            );
-          })}
-        </div>
-      </nav>
-      </>
+          {/* Bottom nav */}
+          <nav className="fixed bottom-0 left-0 right-0 z-50 bg-white border-t border-gray-100 shadow-[0_-2px_12px_rgba(0,0,0,0.06)]">
+            <div className="max-w-lg mx-auto flex items-center justify-around px-2">
+              {NAV_ITEMS.map(({ key, label, icon: Icon }) => {
+                const active = section === key;
+                return (
+                  <button key={key} onClick={() => setSection(key)}
+                    className="flex flex-col items-center gap-1 py-3 px-4 min-w-[60px]">
+                    <Icon size={22} className={active ? 'text-reads-green' : 'text-reads-muted'} strokeWidth={active ? 2.5 : 1.8} />
+                    <span className={`text-[10px] font-semibold ${active ? 'text-reads-green' : 'text-reads-muted'}`}>{label}</span>
+                  </button>
+                );
+              })}
+            </div>
+          </nav>
+        </>
       )}
     </div>
   );
