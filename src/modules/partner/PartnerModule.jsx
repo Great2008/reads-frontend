@@ -353,7 +353,6 @@ export default function PartnerModule({ user, onLogout }) {
         {section === 'students' && <StudentsSection />}
         {section === 'staff' && <StaffSection />}
         {section === 'classes' && <ClassesSection />}
-        {section === 'portal' && <SchoolPortalModule onBack={() => setSection('overview')} />}
         {section === 'wallet' && <PartnerWalletSection />}
       </main>
 
@@ -372,6 +371,8 @@ export default function PartnerModule({ user, onLogout }) {
           })}
         </div>
       </nav>
+      </>
+      )}
     </div>
   );
 }
