@@ -150,22 +150,36 @@ export default function App() {
   const navigate = (newView) => setView(newView);
 
   const handleLoginSuccess = async () => {
-    const userData = await api.auth.me();
-    if (!userData) { handleLogout(); return; }
-    const [stats, balance, notifData] = await Promise.allSettled([
-      api.profile.getStats(),
-      api.wallet.getBalance(),
-      api.notifications.getUnreadCount(),
-    ]);
-    const s = stats.status === 'fulfilled' ? stats.value : {};
-    setUser({
-      ...userData,
-      lessons_completed: s.lessons_completed ?? 0,
-      quizzes_taken: s.quizzes_taken ?? 0,
-    });
-    setTokenBalance(balance.status === 'fulfilled' ? balance.value : 0);
-    setUnreadCount(notifData.status === 'fulfilled' ? notifData.value?.count ?? 0 : 0);
-    setView('dashboard');
+    try {
+      const userData = await api.auth.me();
+      if (!userData || !userData.id) {
+        // Token invalid or expired — clear and go to login
+        localStorage.removeItem('access_token');
+        localStorage.removeItem('refresh_token');
+        setUser(null);
+        setView('login');
+        return;
+      }
+
+      const isPartner = userData.account_type === 'partner' || userData.account_type === 'school_staff';
+      const [stats, balance, notifData] = await Promise.allSettled([
+        isPartner ? Promise.resolve({}) : api.profile.getStats(),
+        api.wallet.getBalance(),
+        api.notifications.getUnreadCount(),
+      ]);
+      const s = stats.status === 'fulfilled' ? stats.value : {};
+      setUser({
+        ...userData,
+        lessons_completed: s.lessons_completed ?? 0,
+        quizzes_taken: s.quizzes_taken ?? 0,
+      });
+      setTokenBalance(balance.status === 'fulfilled' ? balance.value : 0);
+      setUnreadCount(notifData.status === 'fulfilled' ? notifData.value?.count ?? 0 : 0);
+      setView('dashboard');
+    } catch (e) {
+      // Network error — don't clear token, go to login page so user can retry
+      setView('login');
+    }
   };
 
   const handleLogout = async () => {
