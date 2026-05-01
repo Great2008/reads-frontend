@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import {
   LayoutDashboard, Users, BookOpen, ClipboardList, Wallet,
   Settings, UserPlus, Upload, Download, ChevronRight,
-  School, Loader2, ArrowLeft, CheckCircle, XCircle, Edit2, Trash2, GraduationCap, Plus
+  School, Loader2, ArrowLeft, CheckCircle, XCircle, Edit2, Trash2, GraduationCap, Plus, FileText, AlertCircle
 } from 'lucide-react';
 import { api } from '../../services/api.js';
 import SchoolPortalModule from './SchoolPortalModule.jsx';
@@ -303,6 +303,111 @@ function ClassesSection() {
   );
 }
 
+
+// ── Lesson Edit Requests (Partner) ───────────────────────────────────────────
+function EditRequestsSection() {
+  const [lessons, setLessons] = useState([]);
+  const [requests, setRequests] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [selectedLesson, setSelectedLesson] = useState(null);
+  const [form, setForm] = useState({ reason: '', suggested_changes: '' });
+  const [saving, setSaving] = useState(false);
+  const [view, setView] = useState('requests'); // 'requests' | 'new'
+  const [toast, setToast] = useState(null);
+  const showToast = (msg, type = 'success') => { setToast({ msg, type }); setTimeout(() => setToast(null), 3000); };
+
+  const load = () => {
+    Promise.all([
+      api.partner.getLessons(),
+      api.partner.getEditRequests(),
+    ]).then(([ld, rd]) => {
+      setLessons(ld?.lessons || []);
+      setRequests(rd?.requests || []);
+    }).catch(() => {}).finally(() => setLoading(false));
+  };
+
+  useEffect(() => { load(); }, []);
+
+  const handleSubmit = async () => {
+    if (!selectedLesson || !form.reason || !form.suggested_changes) return showToast('Fill all fields', 'error');
+    setSaving(true);
+    try {
+      await api.partner.submitEditRequest(selectedLesson.id, form);
+      showToast('Edit request submitted!');
+      setView('requests');
+      setForm({ reason: '', suggested_changes: '' });
+      setSelectedLesson(null);
+      load();
+    } catch (e) { showToast(e.message || 'Failed', 'error'); }
+    finally { setSaving(false); }
+  };
+
+  const statusColor = (s) => s === 'approved' ? 'text-reads-green' : s === 'rejected' ? 'text-red-500' : 'text-amber-600';
+
+  if (loading) return <LoadingOverlay />;
+
+  return (
+    <div className="px-4 pt-2 pb-4 animate-fade-in">
+      <div className="flex items-center justify-between mb-4">
+        <div>
+          <h2 className="font-black text-reads-navy text-lg">Lesson Edits</h2>
+          <p className="text-reads-muted text-xs">Request corrections to lesson content</p>
+        </div>
+        <button onClick={() => setView(view === 'new' ? 'requests' : 'new')}
+          className="flex items-center gap-1.5 bg-reads-green text-white text-xs font-bold px-3 py-2 rounded-xl">
+          {view === 'new' ? 'View Requests' : <><Plus size={14} /> New Request</>}
+        </button>
+      </div>
+
+      {view === 'new' ? (
+        <div className="space-y-4">
+          <div>
+            <label className="reads-label">Select Lesson</label>
+            <select className="reads-input" value={selectedLesson?.id || ''}
+              onChange={e => setSelectedLesson(lessons.find(l => l.id === e.target.value) || null)}>
+              <option value="">— Choose a lesson —</option>
+              {lessons.map(l => <option key={l.id} value={l.id}>{l.title}</option>)}
+            </select>
+          </div>
+          <div>
+            <label className="reads-label">Reason for correction</label>
+            <textarea className="reads-input" rows={3} placeholder="What is wrong with this lesson?"
+              value={form.reason} onChange={e => setForm(f => ({ ...f, reason: e.target.value }))} />
+          </div>
+          <div>
+            <label className="reads-label">Suggested correction</label>
+            <textarea className="reads-input" rows={6} placeholder="Provide the corrected content..."
+              value={form.suggested_changes} onChange={e => setForm(f => ({ ...f, suggested_changes: e.target.value }))} />
+          </div>
+          <button onClick={handleSubmit} disabled={saving}
+            className="reads-btn-primary w-full flex items-center justify-center gap-2">
+            {saving && <Loader2 size={16} className="animate-spin" />} Submit Request
+          </button>
+        </div>
+      ) : requests.length === 0 ? (
+        <EmptyState icon={FileText} title="No edit requests yet"
+          description="Spot an error in a lesson? Request a correction and admin will review it." />
+      ) : (
+        <div className="space-y-3">
+          {requests.map(r => (
+            <div key={r.id} className="reads-card px-4 py-3">
+              <div className="flex items-start justify-between gap-2">
+                <div className="flex-1">
+                  <p className="font-bold text-reads-navy text-sm">{r.lesson_title}</p>
+                  <p className="text-reads-muted text-xs mt-0.5 line-clamp-2">{r.reason}</p>
+                </div>
+                <span className={`text-xs font-bold capitalize flex-shrink-0 ${statusColor(r.status)}`}>{r.status}</span>
+              </div>
+              <p className="text-reads-muted text-[10px] mt-1">{new Date(r.created_at).toLocaleDateString()}</p>
+            </div>
+          ))}
+        </div>
+      )}
+      {toast && <Toast message={toast.msg} type={toast.type} onClose={() => setToast(null)} />}
+    </div>
+  );
+}
+
 // ── Nav items ─────────────────────────────────────────────────────────────────
 const NAV_ITEMS = [
   { key: 'overview',  label: 'Overview',  icon: LayoutDashboard },
@@ -310,6 +415,7 @@ const NAV_ITEMS = [
   { key: 'staff',     label: 'Staff',     icon: UserPlus },
   { key: 'classes',   label: 'Classes',   icon: GraduationCap },
   { key: 'portal',    label: 'Portal',    icon: BookOpen },
+  { key: 'edits',     label: 'Edits',     icon: FileText },
   { key: 'wallet',    label: 'Wallet',    icon: Wallet },
 ];
 
@@ -358,6 +464,7 @@ export default function PartnerModule({ user, onLogout }) {
             {section === 'students' && <StudentsSection />}
             {section === 'staff' && <StaffSection />}
             {section === 'classes' && <ClassesSection />}
+          {section === 'edits' && <EditRequestsSection />}
             {section === 'wallet' && <PartnerWalletSection />}
           </main>
 

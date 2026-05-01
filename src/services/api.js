@@ -38,7 +38,7 @@ const handleError = async (res, action) => {
     }
   }
 
-  if (res.status === 409) throw new Error('Email already Registered');
+  if (res.status === 409) throw new Error('QuizAlreadyCompleted');
   if (res.status === 429) {
     const json = await res.json().catch(() => ({}));
     throw new Error(json.detail || 'Rate limit exceeded. Please try again later.');
@@ -427,6 +427,8 @@ export const admin = {
   getSchoolCurriculum: (school_id) => get(`/admin/schools/${school_id}/curriculum`),
 
   // Audit Log
+  getSchools: () => get('/admin/schools'),
+  getSchoolCurriculum: (school_id) => get(`/admin/schools/${school_id}/curriculum`),
   getAuditLog: (params = {}) => {
     const qs = new URLSearchParams(params).toString();
     return get(`/admin/audit${qs ? `?${qs}` : ''}`);
@@ -455,6 +457,9 @@ export const partner = {
   },
   getFees: () => get('/partner/school/fees'),
   getSessions: () => get('/partner/school/sessions'),
+  getLessons: () => get('/partner/lessons'),
+  submitEditRequest: (lesson_id, data) => post(`/partner/lessons/${lesson_id}/edit-request`, data),
+  getEditRequests: () => get('/partner/lessons/edit-requests'),
 
   // Classes
   getClasses: () => get('/partner/school/classes'),

@@ -346,6 +346,11 @@ function LessonsSection() {
               <input className="reads-input" type="number" value={editForm.token_reward}
                 onChange={(e) => setEditForm((f) => ({ ...f, token_reward: parseInt(e.target.value) || 0 }))} />
             </div>
+            <div className="flex items-center gap-2">
+              <input type="checkbox" id="is_general" checked={editForm.is_general || false}
+                onChange={(e) => setEditForm((f) => ({ ...f, is_general: e.target.checked, school_id: e.target.checked ? null : f.school_id }))} />
+              <label htmlFor="is_general" className="reads-label mb-0">General lesson (visible to all students)</label>
+            </div>
             <div>
               <label className="reads-label">Content</label>
               <textarea className="reads-input" rows={6} value={editForm.content}
@@ -417,6 +422,264 @@ function LessonsSection() {
   );
 }
 
+
+
+// ─────────────────────────────────────────────
+// Quiz Manager Section
+// ─────────────────────────────────────────────
+function QuizSection() {
+  const [lessons, setLessons] = useState([]);
+  const [selectedLesson, setSelectedLesson] = useState(null);
+  const [questions, setQuestions] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [qLoading, setQLoading] = useState(false);
+  const [showForm, setShowForm] = useState(false);
+  const [editQ, setEditQ] = useState(null);
+  const [form, setForm] = useState({ question_text: '', options: ['', '', '', ''], correct_index: 0, explanation: '' });
+  const [saving, setSaving] = useState(false);
+  const [toast, setToast] = useState(null);
+  const showToast = (msg, type = 'success') => { setToast({ msg, type }); setTimeout(() => setToast(null), 3000); };
+
+  useEffect(() => {
+    api.admin.getLessons({ limit: 100 })
+      .then((d) => setLessons(d?.lessons || []))
+      .catch(() => {})
+      .finally(() => setLoading(false));
+  }, []);
+
+  const loadQuestions = async (lesson) => {
+    setSelectedLesson(lesson);
+    setQLoading(true);
+    try { const d = await api.admin.getQuestions(lesson.id); setQuestions(d?.questions || []); }
+    catch { showToast('Failed to load questions', 'error'); }
+    finally { setQLoading(false); }
+  };
+
+  const resetForm = () => setForm({ question_text: '', options: ['', '', '', ''], correct_index: 0, explanation: '' });
+
+  const handleSave = async () => {
+    if (!form.question_text || form.options.some(o => !o.trim())) return showToast('Fill all fields', 'error');
+    setSaving(true);
+    try {
+      if (editQ) {
+        await api.admin.updateQuestion(editQ.id, form);
+        showToast('Question updated');
+      } else {
+        await api.admin.createQuestion(selectedLesson.id, form);
+        showToast('Question added');
+      }
+      setShowForm(false); setEditQ(null); resetForm();
+      loadQuestions(selectedLesson);
+    } catch (e) { showToast(e.message || 'Failed', 'error'); }
+    finally { setSaving(false); }
+  };
+
+  const handleDelete = async (id) => {
+    if (!confirm('Delete this question?')) return;
+    try { await api.admin.deleteQuestion(id); showToast('Deleted'); loadQuestions(selectedLesson); }
+    catch (e) { showToast(e.message || 'Failed', 'error'); }
+  };
+
+  const handleEdit = (q) => {
+    setEditQ(q);
+    setForm({ question_text: q.question_text, options: [...q.options], correct_index: q.correct_index, explanation: q.explanation || '' });
+    setShowForm(true);
+  };
+
+  if (loading) return <LoadingOverlay />;
+
+  if (selectedLesson) return (
+    <div className="px-4 pt-2 pb-4 animate-fade-in">
+      <button onClick={() => setSelectedLesson(null)} className="flex items-center gap-1 text-reads-muted text-sm mb-3">← Back</button>
+      <SectionHeader title={selectedLesson.title} subtitle={`${questions.length} questions`}
+        action={<button onClick={() => { setShowForm(true); setEditQ(null); resetForm(); }} className="flex items-center gap-1.5 bg-reads-green text-white text-xs font-bold px-3 py-2 rounded-xl"><Plus size={14} /> Add</button>} />
+
+      {showForm && (
+        <div className="reads-card px-4 py-4 mb-4 space-y-3 border-2 border-reads-green">
+          <p className="font-bold text-reads-navy text-sm">{editQ ? 'Edit Question' : 'New Question'}</p>
+          <div>
+            <label className="reads-label">Question</label>
+            <textarea className="reads-input" rows={3} value={form.question_text}
+              onChange={e => setForm(f => ({ ...f, question_text: e.target.value }))} />
+          </div>
+          {['A', 'B', 'C', 'D'].map((letter, i) => (
+            <div key={i} className="flex items-center gap-2">
+              <input type="radio" checked={form.correct_index === i}
+                onChange={() => setForm(f => ({ ...f, correct_index: i }))} />
+              <input className="reads-input flex-1" placeholder={`Option ${letter}`}
+                value={form.options[i]}
+                onChange={e => { const opts = [...form.options]; opts[i] = e.target.value; setForm(f => ({ ...f, options: opts })); }} />
+            </div>
+          ))}
+          <p className="text-reads-muted text-xs">Select the radio button next to the correct answer</p>
+          <div>
+            <label className="reads-label">Explanation (optional)</label>
+            <textarea className="reads-input" rows={2} value={form.explanation}
+              onChange={e => setForm(f => ({ ...f, explanation: e.target.value }))} />
+          </div>
+          <div className="flex gap-2">
+            <button onClick={handleSave} disabled={saving} className="reads-btn-primary flex-1 flex items-center justify-center gap-2">
+              {saving && <Loader2 size={16} className="animate-spin" />} Save
+            </button>
+            <button onClick={() => { setShowForm(false); setEditQ(null); resetForm(); }} className="reads-card px-4 py-2 text-sm font-bold text-reads-muted">Cancel</button>
+          </div>
+        </div>
+      )}
+
+      {qLoading ? <LoadingOverlay /> : questions.length === 0 ? (
+        <EmptyState icon={HelpCircle} title="No questions yet" description="Add quiz questions for this lesson." />
+      ) : (
+        <div className="space-y-3">
+          {questions.map((q, idx) => (
+            <div key={q.id} className="reads-card px-4 py-3">
+              <div className="flex items-start justify-between gap-2">
+                <p className="font-bold text-reads-navy text-sm flex-1">Q{idx + 1}. {q.question_text}</p>
+                <div className="flex gap-2 flex-shrink-0">
+                  <button onClick={() => handleEdit(q)} className="text-reads-muted hover:text-reads-navy"><Edit2 size={14} /></button>
+                  <button onClick={() => handleDelete(q.id)} className="text-reads-muted hover:text-red-500"><Trash2 size={14} /></button>
+                </div>
+              </div>
+              <div className="mt-2 space-y-1">
+                {q.options.map((opt, i) => (
+                  <p key={i} className={`text-xs px-2 py-1 rounded-lg ${i === q.correct_index ? 'bg-reads-green-bg text-reads-green font-bold' : 'text-reads-muted'}`}>
+                    {String.fromCharCode(65 + i)}. {opt}
+                  </p>
+                ))}
+              </div>
+              {q.explanation && <p className="text-reads-muted text-xs mt-2 italic">{q.explanation}</p>}
+            </div>
+          ))}
+        </div>
+      )}
+      {toast && <Toast message={toast.msg} type={toast.type} onClose={() => setToast(null)} />}
+    </div>
+  );
+
+  return (
+    <div className="px-4 pt-2 pb-4 animate-fade-in">
+      <SectionHeader title="Quiz Manager" subtitle="Select a lesson to manage its questions" />
+      <div className="space-y-2">
+        {lessons.map(l => (
+          <button key={l.id} onClick={() => loadQuestions(l)}
+            className="w-full reads-card px-4 py-3 text-left hover:bg-gray-50 transition-colors flex items-center justify-between">
+            <div>
+              <p className="font-bold text-reads-navy text-sm">{l.title}</p>
+              <p className="text-reads-muted text-xs">{l.subject} · {l.track?.toUpperCase()}</p>
+            </div>
+            <div className="flex items-center gap-2">
+              <Badge label={l.status} variant={{ draft: 'gray', cooldown: 'gold', published: 'green' }[l.status] || 'gray'} />
+              <HelpCircle size={16} className="text-reads-muted" />
+            </div>
+          </button>
+        ))}
+      </div>
+      {toast && <Toast message={toast.msg} type={toast.type} onClose={() => setToast(null)} />}
+    </div>
+  );
+}
+
+// ─────────────────────────────────────────────
+// School Curriculum Section
+// ─────────────────────────────────────────────
+function SchoolCurriculumSection() {
+  const [schools, setSchools] = useState([]);
+  const [selectedSchool, setSelectedSchool] = useState(null);
+  const [curriculum, setCurriculum] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [cLoading, setCLoading] = useState(false);
+  const [expanded, setExpanded] = useState({});
+
+  useEffect(() => {
+    api.admin.getSchools()
+      .then(d => setSchools(d?.schools || []))
+      .catch(() => {})
+      .finally(() => setLoading(false));
+  }, []);
+
+  const loadCurriculum = async (school) => {
+    setSelectedSchool(school);
+    setCLoading(true);
+    try {
+      const d = await api.admin.getSchoolCurriculum(school.id);
+      setCurriculum(d?.curriculum || []);
+    } catch { }
+    finally { setCLoading(false); }
+  };
+
+  const toggle = (key) => setExpanded(e => ({ ...e, [key]: !e[key] }));
+
+  if (loading) return <LoadingOverlay />;
+
+  if (selectedSchool) return (
+    <div className="px-4 pt-2 pb-4 animate-fade-in">
+      <button onClick={() => setSelectedSchool(null)} className="flex items-center gap-1 text-reads-muted text-sm mb-3">← Back</button>
+      <SectionHeader title={selectedSchool.name} subtitle="Curriculum" />
+      {cLoading ? <LoadingOverlay /> : curriculum.length === 0 ? (
+        <EmptyState icon={FileText} title="No curriculum uploaded" description="This school hasn't uploaded curriculum yet." />
+      ) : (
+        <div className="space-y-3">
+          {curriculum.map(cls => (
+            <div key={cls.class_id} className="reads-card overflow-hidden">
+              <button onClick={() => toggle(cls.class_id)}
+                className="w-full px-4 py-3 flex items-center justify-between">
+                <p className="font-bold text-reads-navy text-sm">{cls.class_name}</p>
+                <span className="text-reads-muted text-xs">{cls.subjects.length} subjects</span>
+              </button>
+              {expanded[cls.class_id] && (
+                <div className="border-t border-gray-100 divide-y divide-gray-100">
+                  {cls.subjects.map(subj => (
+                    <div key={subj.id}>
+                      <button onClick={() => toggle(subj.id)}
+                        className="w-full px-4 py-2 flex items-center justify-between bg-gray-50">
+                        <p className="font-semibold text-reads-navy text-xs">{subj.name}</p>
+                        <span className="text-reads-muted text-xs">{subj.topics.length} topics</span>
+                      </button>
+                      {expanded[subj.id] && (
+                        <div className="px-4 py-2 space-y-1">
+                          {subj.topics.map(t => (
+                            <div key={t.id} className="flex items-start gap-2 py-1">
+                              <span className="text-[10px] bg-reads-green-bg text-reads-green px-1.5 py-0.5 rounded font-bold flex-shrink-0">T{t.term}{t.week ? ` W${t.week}` : ''}</span>
+                              <div>
+                                <p className="text-reads-navy text-xs font-semibold">{t.topic}</p>
+                                {t.subtopic && <p className="text-reads-muted text-[10px]">{t.subtopic}</p>}
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+
+  return (
+    <div className="px-4 pt-2 pb-4 animate-fade-in">
+      <SectionHeader title="School Curricula" subtitle="View uploaded curriculum by school" />
+      {schools.length === 0 ? (
+        <EmptyState icon={School} title="No schools yet" />
+      ) : (
+        <div className="space-y-2">
+          {schools.map(s => (
+            <button key={s.id} onClick={() => loadCurriculum(s)}
+              className="w-full reads-card px-4 py-3 text-left hover:bg-gray-50 transition-colors flex items-center justify-between">
+              <div>
+                <p className="font-bold text-reads-navy text-sm">{s.name}</p>
+                <p className="text-reads-muted text-xs">{s.school_code}</p>
+              </div>
+              <FileText size={16} className="text-reads-muted" />
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
 
 // ─────────────────────────────────────────────
 // Audit Log Section
@@ -618,7 +881,9 @@ const ADMIN_NAV = [
   { key: 'lessons',       label: 'Lessons',      icon: BookOpen },
   { key: 'applications',  label: 'Applications', icon: Building2 },
   { key: 'edit-requests', label: 'Requests',     icon: Edit2 },
-  { key: 'audit-log',    label: 'Audit Log',    icon: ClipboardList },
+  { key: 'quiz',         label: 'Quiz',         icon: HelpCircle },
+  { key: 'curriculum',  label: 'Curriculum',  icon: FileText },
+  { key: 'audit-log',   label: 'Audit Log',   icon: ClipboardList },
   { key: 'notifications', label: 'Notify',       icon: Bell },
 ];
 
@@ -661,6 +926,8 @@ export default function AdminModule({ currentUserId }) {
       {section === 'edit-requests' && <EditRequestsSection />}
       {section === 'notifications' && <NotificationsSection />}
       {section === 'audit-log'     && <AuditLogSection />}
+      {section === 'quiz'          && <QuizSection />}
+      {section === 'curriculum'    && <SchoolCurriculumSection />}
     </div>
   );
 }
