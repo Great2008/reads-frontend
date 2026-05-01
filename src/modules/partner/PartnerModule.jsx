@@ -290,7 +290,8 @@ function ClassesSection() {
                 <GraduationCap size={18} className="text-reads-green" />
               </div>
               <p className="flex-1 font-bold text-reads-navy text-sm">{cls.name}</p>
-              <button onClick={() => handleDelete(cls.id, cls.name)} className="text-reads-muted hover:text-reads-red transition-colors">
+              <button onClick={() => handleDelete(cls.id, cls.name)}
+                className="text-reads-muted hover:text-reads-red transition-colors">
                 <Trash2 size={16} />
               </button>
             </div>
