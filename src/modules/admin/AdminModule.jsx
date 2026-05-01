@@ -204,6 +204,9 @@ function LessonsSection() {
   const [aiForm, setAiForm] = useState({ topic: '', subject: '', class_name: '', track: 'school' });
   const [aiLoading, setAiLoading] = useState(false);
   const [aiResult, setAiResult] = useState(null);
+  const [editLesson, setEditLesson] = useState(null);
+  const [editForm, setEditForm] = useState({});
+  const [editSaving, setEditSaving] = useState(false);
   const [toast, setToast] = useState(null);
 
   const showToast = (msg, type = 'success') => {
@@ -216,6 +219,30 @@ function LessonsSection() {
       .catch(() => {})
       .finally(() => setLoading(false));
   }, []);
+
+  const handleEdit = (lesson) => {
+    setEditLesson(lesson);
+    setEditForm({
+      title: lesson.title || '',
+      subject: lesson.subject || '',
+      content: lesson.content || '',
+      class_name: lesson.class_name || '',
+      track: lesson.track || 'school',
+      token_reward: lesson.token_reward || 5,
+    });
+  };
+
+  const handleSaveEdit = async () => {
+    if (!editLesson) return;
+    setEditSaving(true);
+    try {
+      await api.admin.updateLesson(editLesson.id, editForm);
+      showToast('Lesson updated');
+      setLessons((prev) => prev.map((l) => l.id === editLesson.id ? { ...l, ...editForm } : l));
+      setEditLesson(null);
+    } catch (e) { showToast(e.message || 'Failed', 'error'); }
+    finally { setEditSaving(false); }
+  };
 
   const handlePublish = async (id) => {
     try {
@@ -265,6 +292,10 @@ function LessonsSection() {
               </div>
               <div className="flex items-center gap-2 flex-shrink-0">
                 <Badge label={l.status} variant={STATUS_COLOR[l.status] || 'gray'} className="capitalize" />
+                <button onClick={() => handleEdit(l)}
+                  className="text-reads-muted hover:text-reads-navy transition-colors">
+                  <Edit2 size={15} />
+                </button>
                 {l.status === 'draft' && (
                   <button onClick={() => handlePublish(l.id)}
                     className="text-reads-green font-bold text-xs px-2 py-1 bg-reads-green-bg rounded-lg">
@@ -276,6 +307,58 @@ function LessonsSection() {
           ))
         )}
       </div>
+
+      {/* Edit Lesson Modal */}
+      {editLesson && (
+        <Modal title="Edit Lesson" onClose={() => setEditLesson(null)}>
+          <div className="space-y-3">
+            {editLesson.status === 'cooldown' && (
+              <div className="bg-amber-50 border border-amber-200 rounded-xl px-3 py-2">
+                <p className="text-amber-700 text-xs font-semibold">⏱ Cooldown active — admin override enabled</p>
+              </div>
+            )}
+            <div>
+              <label className="reads-label">Title</label>
+              <input className="reads-input" value={editForm.title}
+                onChange={(e) => setEditForm((f) => ({ ...f, title: e.target.value }))} />
+            </div>
+            <div>
+              <label className="reads-label">Subject</label>
+              <input className="reads-input" value={editForm.subject}
+                onChange={(e) => setEditForm((f) => ({ ...f, subject: e.target.value }))} />
+            </div>
+            <div>
+              <label className="reads-label">Class</label>
+              <input className="reads-input" value={editForm.class_name}
+                onChange={(e) => setEditForm((f) => ({ ...f, class_name: e.target.value }))} />
+            </div>
+            <div>
+              <label className="reads-label">Track</label>
+              <select className="reads-input" value={editForm.track}
+                onChange={(e) => setEditForm((f) => ({ ...f, track: e.target.value }))}>
+                {['school', 'jamb', 'waec', 'neco', 'bece', 'ielts', 'sat'].map((t) => (
+                  <option key={t} value={t}>{t.toUpperCase()}</option>
+                ))}
+              </select>
+            </div>
+            <div>
+              <label className="reads-label">Token Reward</label>
+              <input className="reads-input" type="number" value={editForm.token_reward}
+                onChange={(e) => setEditForm((f) => ({ ...f, token_reward: parseInt(e.target.value) || 0 }))} />
+            </div>
+            <div>
+              <label className="reads-label">Content</label>
+              <textarea className="reads-input" rows={6} value={editForm.content}
+                onChange={(e) => setEditForm((f) => ({ ...f, content: e.target.value }))} />
+            </div>
+            <button onClick={handleSaveEdit} disabled={editSaving}
+              className="reads-btn-primary w-full flex items-center justify-center gap-2">
+              {editSaving && <Loader2 size={16} className="animate-spin" />}
+              Save Changes
+            </button>
+          </div>
+        </Modal>
+      )}
 
       {/* AI Generate Modal */}
       {aiModal && (
@@ -330,6 +413,58 @@ function LessonsSection() {
       )}
 
       {toast && <Toast message={toast.msg} type={toast.type} onClose={() => setToast(null)} />}
+    </div>
+  );
+}
+
+
+// ─────────────────────────────────────────────
+// Audit Log Section
+// ─────────────────────────────────────────────
+function AuditLogSection() {
+  const [logs, setLogs] = useState([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    api.admin.getAuditLog({ limit: 50 })
+      .then((d) => setLogs(d?.logs || []))
+      .catch(() => {})
+      .finally(() => setLoading(false));
+  }, []);
+
+  const actionColor = (action) => {
+    if (action?.includes('delete') || action?.includes('reject') || action?.includes('suspend')) return 'text-red-500';
+    if (action?.includes('approve') || action?.includes('publish') || action?.includes('create')) return 'text-reads-green';
+    return 'text-reads-muted';
+  };
+
+  if (loading) return <LoadingOverlay />;
+
+  return (
+    <div className="px-4 pt-2 pb-4 animate-fade-in">
+      <SectionHeader title="Audit Log" subtitle={`${logs.length} recent actions`} />
+      {logs.length === 0 ? (
+        <EmptyState icon={ClipboardList} title="No audit logs yet" />
+      ) : (
+        <div className="space-y-2">
+          {logs.map((log) => (
+            <div key={log.id} className="reads-card px-4 py-3">
+              <div className="flex items-start justify-between gap-2">
+                <div className="flex-1 min-w-0">
+                  <p className={`font-bold text-sm ${actionColor(log.action)}`}>{log.action?.replace(/_/g, ' ')}</p>
+                  <p className="text-reads-muted text-xs truncate">{log.actor_name || log.actor_id}</p>
+                  {log.entity_type && (
+                    <p className="text-reads-muted text-xs">{log.entity_type} · {log.entity_id?.substring(0, 8)}…</p>
+                  )}
+                </div>
+                <p className="text-reads-muted text-[10px] flex-shrink-0">
+                  {new Date(log.created_at).toLocaleString()}
+                </p>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
     </div>
   );
 }
@@ -483,6 +618,7 @@ const ADMIN_NAV = [
   { key: 'lessons',       label: 'Lessons',      icon: BookOpen },
   { key: 'applications',  label: 'Applications', icon: Building2 },
   { key: 'edit-requests', label: 'Requests',     icon: Edit2 },
+  { key: 'audit-log',    label: 'Audit Log',    icon: ClipboardList },
   { key: 'notifications', label: 'Notify',       icon: Bell },
 ];
 
@@ -524,6 +660,7 @@ export default function AdminModule({ currentUserId }) {
       {section === 'applications'  && <ApplicationsSection />}
       {section === 'edit-requests' && <EditRequestsSection />}
       {section === 'notifications' && <NotificationsSection />}
+      {section === 'audit-log'     && <AuditLogSection />}
     </div>
   );
 }
