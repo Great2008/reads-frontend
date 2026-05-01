@@ -221,6 +221,14 @@ function LessonsSection() {
       .finally(() => setLoading(false));
   }, []);
 
+  const handleToggleCooldown = async (id, isCooldown) => {
+    try {
+      const res = await api.admin.toggleCooldown(id);
+      showToast(res.message);
+      loadLessons();
+    } catch (e) { showToast(e.message || 'Failed', 'error'); }
+  };
+
   const handleEdit = (lesson) => {
     setEditLesson(lesson);
     setEditForm({
@@ -303,6 +311,18 @@ function LessonsSection() {
                     Publish
                   </button>
                 )}
+                {l.status === 'published' && !l.is_cooldown && (
+                  <button onClick={() => handleToggleCooldown(l.id, false)}
+                    className="text-amber-600 font-bold text-xs px-2 py-1 bg-amber-50 rounded-lg">
+                    Cooldown
+                  </button>
+                )}
+                {l.is_cooldown && (
+                  <button onClick={() => handleToggleCooldown(l.id, true)}
+                    className="text-reads-green font-bold text-xs px-2 py-1 bg-reads-green-bg rounded-lg">
+                    Go Live
+                  </button>
+                )}
               </div>
             </div>
           ))
@@ -313,7 +333,7 @@ function LessonsSection() {
       {editLesson && (
         <Modal title="Edit Lesson" onClose={() => setEditLesson(null)}>
           <div className="space-y-3">
-            {editLesson.status === 'cooldown' && (
+            {editLesson.is_cooldown && (
               <div className="bg-amber-50 border border-amber-200 rounded-xl px-3 py-2">
                 <p className="text-amber-700 text-xs font-semibold">⏱ Cooldown active — admin override enabled</p>
               </div>

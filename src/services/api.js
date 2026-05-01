@@ -38,7 +38,7 @@ const handleError = async (res, action) => {
     }
   }
 
-  if (res.status === 409) throw new Error('QuizAlreadyCompleted');
+  if (res.status === 409) throw new Error('Email already registered');
   if (res.status === 429) {
     const json = await res.json().catch(() => ({}));
     throw new Error(json.detail || 'Rate limit exceeded. Please try again later.');
@@ -369,6 +369,7 @@ export const admin = {
   },
   createLesson: (data) => post('/admin/lessons', data),
   updateLesson: (lesson_id, data) => patch(`/admin/lessons/${lesson_id}`, data),
+  toggleCooldown: (lesson_id) => post(`/admin/lessons/${lesson_id}/cooldown`, {}),
   publishLesson: (lesson_id) => post(`/admin/lessons/${lesson_id}/publish`, {}),
   aiGenerate: (data) => post('/admin/lessons/ai-generate', data),
   getEditRequests: () => get('/admin/lessons/edit-requests'),
