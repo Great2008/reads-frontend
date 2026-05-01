@@ -38,7 +38,7 @@ const handleError = async (res, action) => {
     }
   }
 
-  if (res.status === 409) throw new Error('message');
+  if (res.status === 409) throw new Error('Email already Registered');
   if (res.status === 429) {
     const json = await res.json().catch(() => ({}));
     throw new Error(json.detail || 'Rate limit exceeded. Please try again later.');
