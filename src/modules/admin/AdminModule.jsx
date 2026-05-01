@@ -3,7 +3,8 @@ import {
   Shield, Users, BookOpen, BarChart2, Bell, CheckCircle,
   XCircle, Loader2, ChevronRight, AlertTriangle, Building2,
   GraduationCap, Settings, ClipboardList, Sparkles, Eye,
-  Edit2, Trash2, Plus, Search, ArrowLeft, RefreshCw
+  Edit2, Trash2, Plus, Search, ArrowLeft, RefreshCw,
+  HelpCircle, FileText, School, ClipboardList
 } from 'lucide-react';
 import { api } from '../../services/api.js';
 import {
