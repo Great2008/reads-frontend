@@ -332,11 +332,7 @@ const OtpView = ({ userId, email, onVerified, onBack }) => {
   const handleResend = async () => {
     setResending(true);
     try {
-      await fetch(`/api/auth/resend-otp`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ user_id: userId }),
-      });
+      await api.auth.resendOtp({ user_id: userId });
       setResent(true); setTimeout(() => setResent(false), 4000);
     } catch (_) {}
     setResending(false);

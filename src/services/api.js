@@ -72,7 +72,15 @@ export const auth = {
   register: (data) => post('/auth/register/student', data, false),
 
   /** Verify email OTP → activates account. */
-  verifyOtp: (data) => post('/auth/verify-otp', data, false),
+  resendOtp: (data) => post('/auth/resend-otp', data, false),
+  verifyOtp: async (data) => {
+    const res = await post('/auth/verify-otp', data, false);
+    if (res?.access_token) {
+      localStorage.setItem('access_token', res.access_token);
+      if (res.refresh_token) localStorage.setItem('refresh_token', res.refresh_token);
+    }
+    return res;
+  },
 
   /** Login → returns { access_token, refresh_token, role } */
   login: async (email, password) => {
