@@ -2,7 +2,8 @@ import { useState, useEffect } from 'react';
 import {
   LayoutDashboard, Users, BookOpen, ClipboardList, Wallet,
   Settings, UserPlus, Upload, Download, ChevronRight,
-  School, Loader2, ArrowLeft, CheckCircle, XCircle, Edit2, Trash2, GraduationCap, Plus, FileText, AlertCircle
+  School, Loader2, ArrowLeft, CheckCircle, XCircle, Edit2, Trash2, GraduationCap, Plus, FileText, AlertCircle,
+  Calendar, TrendingUp, User
 } from 'lucide-react';
 import { api } from '../../services/api.js';
 import SchoolPortalModule from './SchoolPortalModule.jsx';
@@ -408,6 +409,282 @@ function EditRequestsSection() {
   );
 }
 
+
+// ── Sessions & Promotions Section ────────────────────────────────────────────
+function SessionsSection({ classes }) {
+  const [sessions, setSessions] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [view, setView] = useState('sessions'); // sessions | promote | bulk
+  const [form, setForm] = useState({ name: '', start_date: '', end_date: '', is_current: false });
+  const [promoteForm, setPromoteForm] = useState({ student_id: '', to_class_id: '', type: 'promoted' });
+  const [bulkForm, setBulkForm] = useState({ from_class_id: '', to_class_id: '', type: 'promoted' });
+  const [students, setStudents] = useState([]);
+  const [saving, setSaving] = useState(false);
+  const [toast, setToast] = useState(null);
+  const showToast = (msg, type = 'success') => { setToast({ msg, type }); setTimeout(() => setToast(null), 3000); };
+
+  const loadSessions = () => {
+    api.partner.getSessions()
+      .then(d => setSessions(d?.sessions || []))
+      .catch(() => {})
+      .finally(() => setLoading(false));
+  };
+
+  const loadStudents = () => {
+    api.partner.getStudents()
+      .then(d => setStudents(d?.students || []))
+      .catch(() => {});
+  };
+
+  useEffect(() => { loadSessions(); loadStudents(); }, []);
+
+  const handleCreateSession = async () => {
+    if (!form.name.trim()) return showToast('Enter a session name', 'error');
+    setSaving(true);
+    try {
+      await api.partner.createSession(form);
+      showToast(`Session '${form.name}' created`);
+      setForm({ name: '', start_date: '', end_date: '', is_current: false });
+      loadSessions();
+    } catch (e) { showToast(e.message || 'Failed', 'error'); }
+    finally { setSaving(false); }
+  };
+
+  const handleSetCurrent = async (id, name) => {
+    try {
+      await api.partner.setCurrentSession(id);
+      showToast(`'${name}' is now current session`);
+      loadSessions();
+    } catch (e) { showToast(e.message || 'Failed', 'error'); }
+  };
+
+  const handlePromote = async () => {
+    if (!promoteForm.student_id || !promoteForm.to_class_id) return showToast('Fill all fields', 'error');
+    setSaving(true);
+    try {
+      const res = await api.partner.promoteStudent(promoteForm);
+      showToast(res.message || 'Student promoted');
+      setPromoteForm({ student_id: '', to_class_id: '', type: 'promoted' });
+      loadStudents();
+    } catch (e) { showToast(e.message || 'Failed', 'error'); }
+    finally { setSaving(false); }
+  };
+
+  const handleBulkPromote = async () => {
+    if (!bulkForm.from_class_id || !bulkForm.to_class_id) return showToast('Select both classes', 'error');
+    if (!confirm(`Promote ALL students from the selected class? This cannot be undone.`)) return;
+    setSaving(true);
+    try {
+      const res = await api.partner.bulkPromote(bulkForm);
+      showToast(res.message || 'Bulk promotion done');
+    } catch (e) { showToast(e.message || 'Failed', 'error'); }
+    finally { setSaving(false); }
+  };
+
+  if (loading) return <LoadingOverlay />;
+
+  return (
+    <div className="px-4 pt-2 pb-4 animate-fade-in">
+      {/* Tab switcher */}
+      <div className="flex gap-2 mb-4">
+        {[['sessions', 'Sessions'], ['promote', 'Promote Student'], ['bulk', 'Bulk Promote']].map(([k, l]) => (
+          <button key={k} onClick={() => setView(k)}
+            className={`text-xs font-bold px-3 py-2 rounded-xl transition-colors
+              ${view === k ? 'bg-reads-navy text-white' : 'bg-gray-100 text-reads-muted'}`}>
+            {l}
+          </button>
+        ))}
+      </div>
+
+      {view === 'sessions' && (
+        <div className="space-y-4">
+          <SectionHeader title="Academic Sessions" subtitle={`${sessions.length} sessions`} />
+          <div className="reads-card px-4 py-4 space-y-3 border-2 border-reads-green">
+            <p className="font-bold text-reads-navy text-sm">New Session</p>
+            <input className="reads-input" placeholder="e.g. 2024/2025"
+              value={form.name} onChange={e => setForm(f => ({ ...f, name: e.target.value }))} />
+            <div className="grid grid-cols-2 gap-2">
+              <div>
+                <label className="reads-label">Start Date</label>
+                <input className="reads-input" type="date" value={form.start_date}
+                  onChange={e => setForm(f => ({ ...f, start_date: e.target.value }))} />
+              </div>
+              <div>
+                <label className="reads-label">End Date</label>
+                <input className="reads-input" type="date" value={form.end_date}
+                  onChange={e => setForm(f => ({ ...f, end_date: e.target.value }))} />
+              </div>
+            </div>
+            <div className="flex items-center gap-2">
+              <input type="checkbox" id="is_current" checked={form.is_current}
+                onChange={e => setForm(f => ({ ...f, is_current: e.target.checked }))} />
+              <label htmlFor="is_current" className="reads-label mb-0 text-xs">Set as current session</label>
+            </div>
+            <button onClick={handleCreateSession} disabled={saving}
+              className="reads-btn-primary w-full flex items-center justify-center gap-2">
+              {saving && <Loader2 size={16} className="animate-spin" />} Create Session
+            </button>
+          </div>
+          <div className="space-y-2">
+            {sessions.map(s => (
+              <div key={s.id} className="reads-card px-4 py-3 flex items-center justify-between">
+                <div>
+                  <div className="flex items-center gap-2">
+                    <p className="font-bold text-reads-navy text-sm">{s.name}</p>
+                    {s.is_current && <span className="text-[10px] bg-reads-green-bg text-reads-green font-bold px-2 py-0.5 rounded-full">Current</span>}
+                  </div>
+                  {s.start_date && <p className="text-reads-muted text-xs">{new Date(s.start_date).toLocaleDateString()} — {s.end_date ? new Date(s.end_date).toLocaleDateString() : 'ongoing'}</p>}
+                </div>
+                {!s.is_current && (
+                  <button onClick={() => handleSetCurrent(s.id, s.name)}
+                    className="text-xs font-bold text-reads-green px-3 py-1.5 bg-reads-green-bg rounded-xl">
+                    Set Current
+                  </button>
+                )}
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {view === 'promote' && (
+        <div className="space-y-4">
+          <SectionHeader title="Promote Student" subtitle="Move a single student to another class" />
+          <div className="reads-card px-4 py-4 space-y-3">
+            <div>
+              <label className="reads-label">Student</label>
+              <select className="reads-input" value={promoteForm.student_id}
+                onChange={e => setPromoteForm(f => ({ ...f, student_id: e.target.value }))}>
+                <option value="">— Select student —</option>
+                {students.map(s => <option key={s.id} value={s.id}>{s.full_name} {s.class_name ? `(${s.class_name})` : ''}</option>)}
+              </select>
+            </div>
+            <div>
+              <label className="reads-label">Move to Class</label>
+              <select className="reads-input" value={promoteForm.to_class_id}
+                onChange={e => setPromoteForm(f => ({ ...f, to_class_id: e.target.value }))}>
+                <option value="">— Select class —</option>
+                {classes.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+              </select>
+            </div>
+            <div>
+              <label className="reads-label">Type</label>
+              <select className="reads-input" value={promoteForm.type}
+                onChange={e => setPromoteForm(f => ({ ...f, type: e.target.value }))}>
+                <option value="promoted">Promoted</option>
+                <option value="repeated">Repeated</option>
+                <option value="graduated">Graduated</option>
+              </select>
+            </div>
+            <button onClick={handlePromote} disabled={saving}
+              className="reads-btn-primary w-full flex items-center justify-center gap-2">
+              {saving && <Loader2 size={16} className="animate-spin" />} Promote Student
+            </button>
+          </div>
+        </div>
+      )}
+
+      {view === 'bulk' && (
+        <div className="space-y-4">
+          <SectionHeader title="Bulk Promotion" subtitle="Move all students from one class to another" />
+          <div className="reads-card px-4 py-4 space-y-3 border-2 border-amber-400">
+            <div className="bg-amber-50 px-3 py-2 rounded-xl">
+              <p className="text-amber-700 text-xs font-semibold">⚠ This will move ALL students in the selected class.</p>
+            </div>
+            <div>
+              <label className="reads-label">From Class</label>
+              <select className="reads-input" value={bulkForm.from_class_id}
+                onChange={e => setBulkForm(f => ({ ...f, from_class_id: e.target.value }))}>
+                <option value="">— Select class —</option>
+                {classes.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+              </select>
+            </div>
+            <div>
+              <label className="reads-label">To Class</label>
+              <select className="reads-input" value={bulkForm.to_class_id}
+                onChange={e => setBulkForm(f => ({ ...f, to_class_id: e.target.value }))}>
+                <option value="">— Select class —</option>
+                {classes.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+              </select>
+            </div>
+            <div>
+              <label className="reads-label">Type</label>
+              <select className="reads-input" value={bulkForm.type}
+                onChange={e => setBulkForm(f => ({ ...f, type: e.target.value }))}>
+                <option value="promoted">Promoted</option>
+                <option value="repeated">Repeated</option>
+                <option value="graduated">Graduated</option>
+              </select>
+            </div>
+            <button onClick={handleBulkPromote} disabled={saving}
+              className="w-full bg-amber-500 text-white font-bold py-3 rounded-xl flex items-center justify-center gap-2">
+              {saving && <Loader2 size={16} className="animate-spin" />} Bulk Promote
+            </button>
+          </div>
+        </div>
+      )}
+      {toast && <Toast message={toast.msg} type={toast.type} onClose={() => setToast(null)} />}
+    </div>
+  );
+}
+
+// ── School Profile Section ────────────────────────────────────────────────────
+function SchoolProfileSection() {
+  const [profile, setProfile] = useState({});
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [toast, setToast] = useState(null);
+  const showToast = (msg, type = 'success') => { setToast({ msg, type }); setTimeout(() => setToast(null), 3000); };
+
+  useEffect(() => {
+    api.partner.getSchoolProfile()
+      .then(d => setProfile(d || {}))
+      .catch(() => {})
+      .finally(() => setLoading(false));
+  }, []);
+
+  const handleSave = async () => {
+    setSaving(true);
+    try {
+      await api.partner.updateSchoolProfile({ name: profile.name, address: profile.address, phone: profile.phone, email: profile.email });
+      showToast('Profile updated');
+    } catch (e) { showToast(e.message || 'Failed', 'error'); }
+    finally { setSaving(false); }
+  };
+
+  if (loading) return <LoadingOverlay />;
+
+  return (
+    <div className="px-4 pt-2 pb-4 animate-fade-in space-y-4">
+      <SectionHeader title="School Profile" subtitle={profile.school_code} />
+      <div className="reads-card px-4 py-4 space-y-3">
+        {[
+          { label: 'School Name', key: 'name', placeholder: 'School name' },
+          { label: 'Address', key: 'address', placeholder: 'School address' },
+          { label: 'Phone', key: 'phone', placeholder: 'Contact number' },
+          { label: 'Email', key: 'email', placeholder: 'Contact email', type: 'email' },
+        ].map(({ label, key, placeholder, type }) => (
+          <div key={key}>
+            <label className="reads-label">{label}</label>
+            <input className="reads-input" type={type || 'text'} placeholder={placeholder}
+              value={profile[key] || ''}
+              onChange={e => setProfile(p => ({ ...p, [key]: e.target.value }))} />
+          </div>
+        ))}
+        <div className="reads-card px-4 py-2 bg-gray-50">
+          <p className="text-reads-muted text-xs">School Code (read-only)</p>
+          <p className="font-black text-reads-navy text-sm tracking-widest">{profile.school_code}</p>
+        </div>
+        <button onClick={handleSave} disabled={saving}
+          className="reads-btn-primary w-full flex items-center justify-center gap-2">
+          {saving && <Loader2 size={16} className="animate-spin" />} Save Changes
+        </button>
+      </div>
+      {toast && <Toast message={toast.msg} type={toast.type} onClose={() => setToast(null)} />}
+    </div>
+  );
+}
+
 // ── Nav items ─────────────────────────────────────────────────────────────────
 const NAV_ITEMS = [
   { key: 'overview',  label: 'Overview',  icon: LayoutDashboard },
@@ -415,7 +692,9 @@ const NAV_ITEMS = [
   { key: 'staff',     label: 'Staff',     icon: UserPlus },
   { key: 'classes',   label: 'Classes',   icon: GraduationCap },
   { key: 'portal',    label: 'Portal',    icon: BookOpen },
-  { key: 'edits',     label: 'Edits',     icon: FileText },
+  { key: 'edits',      label: 'Edits',     icon: FileText },
+  { key: 'sessions',   label: 'Sessions',  icon: Calendar },
+  { key: 'school-profile', label: 'Profile',  icon: User },
   { key: 'wallet',    label: 'Wallet',    icon: Wallet },
 ];
 
@@ -465,6 +744,8 @@ export default function PartnerModule({ user, onLogout }) {
             {section === 'staff' && <StaffSection />}
             {section === 'classes' && <ClassesSection />}
           {section === 'edits' && <EditRequestsSection />}
+          {section === 'sessions' && <SessionsSection classes={classes} />}
+          {section === 'school-profile' && <SchoolProfileSection />}
             {section === 'wallet' && <PartnerWalletSection />}
           </main>
 

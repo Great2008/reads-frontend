@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { Award, useState, useEffect } from 'react';
 import {
   LayoutDashboard, BookOpen, Wallet, User, Grid,
   Bell, Shield, School, Settings as SettingsIcon,
@@ -20,6 +20,7 @@ import ProfileModule        from './modules/profile/ProfileModule.jsx';
 import SettingsModule       from './modules/settings/SettingsModule.jsx';
 import NotificationInbox    from './modules/notifications/NotificationInbox.jsx';
 import SchoolModule         from './modules/school/SchoolModule.jsx';
+import StudentPortalModule  from './modules/school/StudentPortalModule.jsx';
 import TutorsModule         from './modules/tutors/TutorsModule.jsx';
 import ExamsModule          from './modules/exams/ExamsModule.jsx';
 import MarketplaceModule    from './modules/marketplace/MarketplaceModule.jsx';
@@ -34,6 +35,7 @@ import PartnerModule        from './modules/partner/PartnerModule.jsx';
 const MoreModule = ({ onNavigate }) => {
   const tiles = [
     { label: 'My School',   icon: School,       view: 'school',      color: '#16A34A', bg: '#f0fdf4' },
+    { label: 'My Results',  icon: Award,        view: 'student-portal', color: '#0D1F3C', bg: '#f0fdf4' },
     { label: 'Tutors',      icon: GraduationCap, view: 'tutors',     color: '#6366F1', bg: '#eef2ff' },
     { label: 'Exams',       icon: ClipboardList, view: 'exams',      color: '#0D7A6E', bg: '#f0fdfa' },
     { label: 'Marketplace', icon: ShoppingBag,   view: 'marketplace',color: '#D4A017', bg: '#fffbeb' },
@@ -150,36 +152,22 @@ export default function App() {
   const navigate = (newView) => setView(newView);
 
   const handleLoginSuccess = async () => {
-    try {
-      const userData = await api.auth.me();
-      if (!userData || !userData.id) {
-        // Token invalid or expired — clear and go to login
-        localStorage.removeItem('access_token');
-        localStorage.removeItem('refresh_token');
-        setUser(null);
-        setView('login');
-        return;
-      }
-
-      const isPartner = userData.account_type === 'partner' || userData.account_type === 'school_staff';
-      const [stats, balance, notifData] = await Promise.allSettled([
-        isPartner ? Promise.resolve({}) : api.profile.getStats(),
-        api.wallet.getBalance(),
-        api.notifications.getUnreadCount(),
-      ]);
-      const s = stats.status === 'fulfilled' ? stats.value : {};
-      setUser({
-        ...userData,
-        lessons_completed: s.lessons_completed ?? 0,
-        quizzes_taken: s.quizzes_taken ?? 0,
-      });
-      setTokenBalance(balance.status === 'fulfilled' ? balance.value : 0);
-      setUnreadCount(notifData.status === 'fulfilled' ? notifData.value?.count ?? 0 : 0);
-      setView('dashboard');
-    } catch (e) {
-      // Network error — don't clear token, go to login page so user can retry
-      setView('login');
-    }
+    const userData = await api.auth.me();
+    if (!userData) { handleLogout(); return; }
+    const [stats, balance, notifData] = await Promise.allSettled([
+      api.profile.getStats(),
+      api.wallet.getBalance(),
+      api.notifications.getUnreadCount(),
+    ]);
+    const s = stats.status === 'fulfilled' ? stats.value : {};
+    setUser({
+      ...userData,
+      lessons_completed: s.lessons_completed ?? 0,
+      quizzes_taken: s.quizzes_taken ?? 0,
+    });
+    setTokenBalance(balance.status === 'fulfilled' ? balance.value : 0);
+    setUnreadCount(notifData.status === 'fulfilled' ? notifData.value?.count ?? 0 : 0);
+    setView('dashboard');
   };
 
   const handleLogout = async () => {
@@ -290,6 +278,9 @@ export default function App() {
 
         {view === 'school' && (
           <SchoolModule tokenBalance={tokenBalance} onBalanceUpdate={setTokenBalance} />
+        )}
+        {view === 'student-portal' && (
+          <StudentPortalModule onBack={() => navigate('more')} />
         )}
 
         {view === 'tutors' && (

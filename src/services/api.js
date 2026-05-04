@@ -150,6 +150,13 @@ export const students = {
   applyTrack: (track) => post('/students/tracks/apply', { track }),
   getProgress: () => get('/students/progress'),
   getPromotionHistory: () => get('/students/promotion-history'),
+  getMyResults: (params = {}) => {
+    const q = new URLSearchParams(params).toString();
+    return get(`/students/results${q ? '?' + q : ''}`);
+  },
+  getMyFees: () => get('/students/fees'),
+  payFee: (fee_id) => post(`/students/fees/${fee_id}/pay`, {}),
+  lookupSchool: (code) => get(`/students/school/lookup?code=${encodeURIComponent(code)}`, false),
 };
 
 // ── Notifications ─────────────────────────────────────────────────────────────
