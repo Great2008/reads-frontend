@@ -1,7 +1,7 @@
 import { Award, useState, useEffect } from 'react';
 import {
   LayoutDashboard, BookOpen, Wallet, User, Grid,
-  Bell, Shield, School, Settings as SettingsIcon,
+  Bell, Shield, School, SettingsIcon,
   GraduationCap, ShoppingBag, ClipboardList, Sparkles, Trophy
 } from 'lucide-react';
 
