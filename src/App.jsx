@@ -1,6 +1,6 @@
-import { Award, useState, useEffect } from 'react';
+import { useState, useEffect } from 'react';
 import {
-  LayoutDashboard, BookOpen, Wallet, User, Grid,
+  Award, LayoutDashboard, BookOpen, Wallet, User, Grid,
   Bell, Shield, School, SettingsIcon,
   GraduationCap, ShoppingBag, ClipboardList, Sparkles, Trophy
 } from 'lucide-react';
