@@ -264,6 +264,7 @@ export const lessons = {
 
 // ── Exams ─────────────────────────────────────────────────────────────────────
 export const exams = {
+  getSlip: (reg_id) => get(`/exams/${reg_id}/slip`),
   getWindows: (params = {}) => {
     const qs = new URLSearchParams(params).toString();
     return get(`/exams/windows${qs ? `?${qs}` : ''}`);
@@ -443,6 +444,14 @@ export const admin = {
   getSchoolCurriculum: (school_id) => get(`/admin/schools/${school_id}/curriculum`),
 
   // Audit Log
+  getExamWindows: () => get('/admin/exams/windows'),
+  createExamWindow: (data) => post('/admin/exams/windows', data),
+  getExamRegistrations: (params={}) => {
+    const q = new URLSearchParams(params).toString();
+    return get(`/admin/exams/registrations${q ? '?' + q : ''}`);
+  },
+  verifyExamProof: (id, data) => post(`/admin/exams/registrations/${id}/verify`, data),
+  releaseExamEscrow: (id) => post(`/admin/exams/registrations/${id}/release-escrow`, {}),
   getSchools: () => get('/admin/schools'),
   getSchoolCurriculum: (school_id) => get(`/admin/schools/${school_id}/curriculum`),
   getAuditLog: (params = {}) => {

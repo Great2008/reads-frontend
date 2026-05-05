@@ -702,6 +702,234 @@ function SchoolCurriculumSection() {
   );
 }
 
+
+// ─────────────────────────────────────────────
+// Exam Management Section
+// ─────────────────────────────────────────────
+function ExamSection() {
+  const [tab, setTab] = useState("windows");
+  const [windows, setWindows] = useState([]);
+  const [registrations, setRegistrations] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [showCreate, setShowCreate] = useState(false);
+  const [form, setForm] = useState({
+    exam_type: "JAMB", subject: "", centre_name: "", centre_address: "",
+    exam_date: "", duration_minutes: 180, total_slots: 50, fee_tokens: 100,
+  });
+  const [saving, setSaving] = useState(false);
+  const [statusFilter, setStatusFilter] = useState("proof_uploaded");
+  const [toast, setToast] = useState(null);
+  const showToast = (msg, type="success") => { setToast({msg,type}); setTimeout(()=>setToast(null),3500); };
+
+  const loadWindows = () => {
+    api.admin.getExamWindows()
+      .then(d => setWindows(d?.windows || []))
+      .catch(() => {})
+      .finally(() => setLoading(false));
+  };
+
+  const loadRegistrations = (status) => {
+    api.admin.getExamRegistrations({ status })
+      .then(d => setRegistrations(d?.registrations || []))
+      .catch(() => {});
+  };
+
+  useEffect(() => { loadWindows(); }, []);
+  useEffect(() => { if (tab === "registrations") loadRegistrations(statusFilter); }, [tab, statusFilter]);
+
+  const handleCreate = async () => {
+    if (!form.centre_name || !form.exam_date) return showToast("Fill required fields", "error");
+    setSaving(true);
+    try {
+      await api.admin.createExamWindow(form);
+      showToast("Exam window created");
+      setShowCreate(false);
+      setForm({ exam_type: "JAMB", subject: "", centre_name: "", centre_address: "",
+        exam_date: "", duration_minutes: 180, total_slots: 50, fee_tokens: 100 });
+      loadWindows();
+    } catch (e) { showToast(e.message || "Failed", "error"); }
+    finally { setSaving(false); }
+  };
+
+  const handleVerify = async (id, approved) => {
+    try {
+      await api.admin.verifyExamProof(id, { approved });
+      showToast(approved ? "Proof approved" : "Registration cancelled");
+      loadRegistrations(statusFilter);
+    } catch (e) { showToast(e.message || "Failed", "error"); }
+  };
+
+  const handleReleaseEscrow = async (id) => {
+    if (!confirm("Release escrow to CBT centre?")) return;
+    try {
+      await api.admin.releaseExamEscrow(id);
+      showToast("Escrow released");
+      loadRegistrations(statusFilter);
+    } catch (e) { showToast(e.message || "Failed", "error"); }
+  };
+
+  const EXAM_TYPES = ["JAMB","WAEC","NECO","BECE","IELTS","SAT"];
+
+  return (
+    <div className="px-4 pt-2 pb-4 animate-fade-in">
+      <div className="flex gap-2 mb-4">
+        {[["windows","Exam Windows"],["registrations","Registrations"]].map(([k,l]) => (
+          <button key={k} onClick={() => setTab(k)}
+            className={`text-xs font-bold px-3 py-2 rounded-xl transition-colors ${tab===k ? "bg-reads-navy text-white" : "bg-gray-100 text-reads-muted"}`}>
+            {l}
+          </button>
+        ))}
+      </div>
+
+      {tab === "windows" && (
+        <>
+          <div className="flex items-center justify-between mb-3">
+            <p className="font-black text-reads-navy text-sm">{windows.length} exam windows</p>
+            <button onClick={() => setShowCreate(!showCreate)}
+              className="flex items-center gap-1.5 bg-reads-green text-white text-xs font-bold px-3 py-2 rounded-xl">
+              <Plus size={14} /> Create Window
+            </button>
+          </div>
+
+          {showCreate && (
+            <div className="reads-card px-4 py-4 mb-4 space-y-3 border-2 border-reads-green">
+              <p className="font-bold text-reads-navy text-sm">New Exam Window</p>
+              <div>
+                <label className="reads-label">Exam Type</label>
+                <select className="reads-input" value={form.exam_type}
+                  onChange={e => setForm(f=>({...f,exam_type:e.target.value}))}>
+                  {EXAM_TYPES.map(t => <option key={t}>{t}</option>)}
+                </select>
+              </div>
+              <div>
+                <label className="reads-label">Subject (optional)</label>
+                <input className="reads-input" placeholder="e.g. Mathematics" value={form.subject}
+                  onChange={e => setForm(f=>({...f,subject:e.target.value}))} />
+              </div>
+              <div>
+                <label className="reads-label">Centre Name *</label>
+                <input className="reads-input" placeholder="CBT Centre name" value={form.centre_name}
+                  onChange={e => setForm(f=>({...f,centre_name:e.target.value}))} />
+              </div>
+              <div>
+                <label className="reads-label">Centre Address</label>
+                <input className="reads-input" placeholder="Full address" value={form.centre_address}
+                  onChange={e => setForm(f=>({...f,centre_address:e.target.value}))} />
+              </div>
+              <div>
+                <label className="reads-label">Exam Date & Time *</label>
+                <input className="reads-input" type="datetime-local" value={form.exam_date}
+                  onChange={e => setForm(f=>({...f,exam_date:e.target.value}))} />
+              </div>
+              <div className="grid grid-cols-3 gap-2">
+                <div>
+                  <label className="reads-label">Duration (min)</label>
+                  <input className="reads-input" type="number" value={form.duration_minutes}
+                    onChange={e => setForm(f=>({...f,duration_minutes:parseInt(e.target.value)}))} />
+                </div>
+                <div>
+                  <label className="reads-label">Total Slots</label>
+                  <input className="reads-input" type="number" value={form.total_slots}
+                    onChange={e => setForm(f=>({...f,total_slots:parseInt(e.target.value)}))} />
+                </div>
+                <div>
+                  <label className="reads-label">Fee (tokens)</label>
+                  <input className="reads-input" type="number" value={form.fee_tokens}
+                    onChange={e => setForm(f=>({...f,fee_tokens:parseInt(e.target.value)}))} />
+                </div>
+              </div>
+              <button onClick={handleCreate} disabled={saving}
+                className="reads-btn-primary w-full flex items-center justify-center gap-2">
+                {saving && <Loader2 size={16} className="animate-spin" />} Create Exam Window
+              </button>
+            </div>
+          )}
+
+          {loading ? <LoadingOverlay /> : windows.length === 0 ? (
+            <EmptyState icon={ClipboardList} title="No exam windows" description="Create an exam window to get started." />
+          ) : (
+            <div className="space-y-2">
+              {windows.map(w => (
+                <div key={w.id} className="reads-card px-4 py-3">
+                  <div className="flex items-start justify-between">
+                    <div>
+                      <p className="font-bold text-reads-navy text-sm">{w.exam_type} {w.subject ? `— ${w.subject}` : ""}</p>
+                      <p className="text-reads-muted text-xs">{w.centre_name}</p>
+                      <p className="text-reads-muted text-xs">{new Date(w.exam_date).toLocaleDateString()}</p>
+                    </div>
+                    <div className="text-right">
+                      <p className="text-reads-navy font-bold text-xs">{w.available_slots}/{w.total_slots} slots</p>
+                      <Badge label={w.status} variant={w.status==="open"?"green":"gray"} />
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </>
+      )}
+
+      {tab === "registrations" && (
+        <>
+          <div className="flex gap-2 mb-3 flex-wrap">
+            {["proof_uploaded","registered","verified","cancelled"].map(s => (
+              <button key={s} onClick={() => setStatusFilter(s)}
+                className={`text-xs font-bold px-3 py-1.5 rounded-xl capitalize ${statusFilter===s?"bg-reads-navy text-white":"bg-gray-100 text-reads-muted"}`}>
+                {s.replace(/_/g," ")}
+              </button>
+            ))}
+          </div>
+          {registrations.length === 0 ? (
+            <EmptyState icon={ClipboardList} title="No registrations" description={`No ${statusFilter.replace(/_/g," ")} registrations.`} />
+          ) : (
+            <div className="space-y-3">
+              {registrations.map(r => (
+                <div key={r.id} className="reads-card px-4 py-3">
+                  <div className="flex items-start justify-between gap-2 mb-2">
+                    <div>
+                      <p className="font-bold text-reads-navy text-sm">{r.student_name}</p>
+                      <p className="text-reads-muted text-xs">{r.exam_type} · Seat: {r.seat_number}</p>
+                      <p className="text-reads-muted text-xs">{r.exam_date ? new Date(r.exam_date).toLocaleDateString() : ""}</p>
+                    </div>
+                    <Badge label={r.status.replace(/_/g," ")} variant={r.status==="verified"?"green":r.status==="proof_uploaded"?"gold":"gray"} />
+                  </div>
+                  {r.proof_url && (
+                    <a href={r.proof_url} target="_blank" rel="noopener noreferrer"
+                      className="text-xs text-reads-green font-bold flex items-center gap-1 mb-2">
+                      <Eye size={12} /> View Proof
+                    </a>
+                  )}
+                  <div className="flex gap-2 flex-wrap">
+                    {r.status === "proof_uploaded" && (
+                      <>
+                        <button onClick={() => handleVerify(r.id, true)}
+                          className="text-xs font-bold bg-reads-green text-white px-3 py-1.5 rounded-xl flex items-center gap-1">
+                          <CheckCircle size={12} /> Approve
+                        </button>
+                        <button onClick={() => handleVerify(r.id, false)}
+                          className="text-xs font-bold bg-red-500 text-white px-3 py-1.5 rounded-xl flex items-center gap-1">
+                          <XCircle size={12} /> Reject
+                        </button>
+                      </>
+                    )}
+                    {r.status === "verified" && (
+                      <button onClick={() => handleReleaseEscrow(r.id)}
+                        className="text-xs font-bold bg-reads-gold text-reads-navy px-3 py-1.5 rounded-xl">
+                        Release Escrow
+                      </button>
+                    )}
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </>
+      )}
+      {toast && <Toast message={toast.msg} type={toast.type} onClose={() => setToast(null)} />}
+    </div>
+  );
+}
+
 // ─────────────────────────────────────────────
 // Audit Log Section
 // ─────────────────────────────────────────────
@@ -902,6 +1130,7 @@ const ADMIN_NAV = [
   { key: 'lessons',       label: 'Lessons',      icon: BookOpen },
   { key: 'applications',  label: 'Applications', icon: Building2 },
   { key: 'edit-requests', label: 'Requests',     icon: Edit2 },
+  { key: 'exams',        label: 'Exams',        icon: ClipboardList },
   { key: 'quiz',         label: 'Quiz',         icon: HelpCircle },
   { key: 'curriculum',  label: 'Curriculum',  icon: FileText },
   { key: 'audit-log',   label: 'Audit Log',   icon: ClipboardList },
@@ -947,6 +1176,7 @@ export default function AdminModule({ currentUserId }) {
       {section === 'edit-requests' && <EditRequestsSection />}
       {section === 'notifications' && <NotificationsSection />}
       {section === 'audit-log'     && <AuditLogSection />}
+      {section === 'exams'         && <ExamSection />}
       {section === 'quiz'          && <QuizSection />}
       {section === 'curriculum'    && <SchoolCurriculumSection />}
     </div>

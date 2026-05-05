@@ -1,7 +1,8 @@
 import { useState, useEffect } from 'react';
 import {
   ClipboardList, Calendar, MapPin, Clock, CheckCircle,
-  AlertCircle, ChevronRight, Loader2, Upload, ArrowLeft, Coins
+  AlertCircle, ChevronRight, Loader2, Upload, ArrowLeft, Coins,
+  FileText, Download, Eye, XCircle, Info
 } from 'lucide-react';
 import { api } from '../../services/api.js';
 import { LoadingOverlay, EmptyState, Badge, Modal, Toast, TokenBadge } from '../../components/UI.jsx';
@@ -113,15 +114,93 @@ function ExamWindowCard({ win, onRegister }) {
 function MyRegistrations() {
   const [registrations, setRegistrations] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [slipReg, setSlipReg] = useState(null);
+  const [slip, setSlip] = useState(null);
+  const [slipLoading, setSlipLoading] = useState(false);
+  const [uploading, setUploading] = useState(null);
+  const [toast, setToast] = useState(null);
+  const showToast = (msg, type='success') => { setToast({msg,type}); setTimeout(()=>setToast(null),3500); };
 
-  useEffect(() => {
+  const load = () => {
     api.exams.getRegistrations()
       .then((d) => setRegistrations(d?.registrations || []))
       .catch(() => {})
       .finally(() => setLoading(false));
-  }, []);
+  };
+
+  useEffect(() => { load(); }, []);
+
+  const viewSlip = async (reg) => {
+    setSlipReg(reg); setSlipLoading(true);
+    try {
+      const d = await api.exams.getSlip(reg.id);
+      setSlip(d);
+    } catch { showToast('Failed to load slip', 'error'); }
+    finally { setSlipLoading(false); }
+  };
+
+  const uploadProof = async (reg, file) => {
+    setUploading(reg.id);
+    try {
+      const formData = new FormData();
+      formData.append('file', file);
+      await api.upload(`/exams/${reg.id}/upload-proof`, formData);
+      showToast('Proof uploaded! Admin will verify shortly.');
+      load();
+    } catch (e) { showToast(e.message || 'Upload failed', 'error'); }
+    finally { setUploading(null); }
+  };
 
   if (loading) return <LoadingOverlay />;
+
+  if (slipReg) return (
+    <div className="space-y-4 animate-fade-in">
+      <button onClick={() => { setSlipReg(null); setSlip(null); }}
+        className="flex items-center gap-1 text-reads-muted text-sm">
+        <ArrowLeft size={16} /> Back
+      </button>
+      {slipLoading ? <LoadingOverlay /> : slip ? (
+        <div className="reads-card p-5 space-y-4">
+          <div className="text-center border-b border-gray-100 pb-4">
+            <p className="font-black text-reads-navy text-xl">{slip.exam_type} EXAM</p>
+            <p className="text-reads-muted text-sm">Admission Slip</p>
+          </div>
+          <div className="space-y-3">
+            {[
+              ['Student', slip.student_name],
+              ['Email', slip.student_email],
+              ['Subject', slip.subject || 'All Subjects'],
+              ['Date', new Date(slip.exam_date).toLocaleDateString('en-NG', {weekday:'long',year:'numeric',month:'long',day:'numeric'})],
+              ['Time', new Date(slip.exam_date).toLocaleTimeString('en-NG', {hour:'2-digit',minute:'2-digit'})],
+              ['Duration', `${slip.duration_minutes} minutes`],
+              ['Centre', slip.centre_name],
+              ['Address', slip.centre_address],
+              ['Seat No.', slip.seat_number],
+            ].map(([label, val]) => val ? (
+              <div key={label} className="flex justify-between gap-4">
+                <span className="text-reads-muted text-sm">{label}</span>
+                <span className="font-semibold text-reads-navy text-sm text-right flex-1">{val}</span>
+              </div>
+            ) : null)}
+          </div>
+          <div className={`rounded-xl px-4 py-2 text-center font-bold text-sm ${
+            slip.status === 'verified' ? 'bg-reads-green-bg text-reads-green' :
+            slip.status === 'proof_uploaded' ? 'bg-amber-50 text-amber-600' :
+            'bg-blue-50 text-blue-600'
+          }`}>
+            Status: {slip.status?.replace(/_/g, ' ').toUpperCase()}
+          </div>
+          {slip.status === 'registered' && (
+            <div className="bg-amber-50 border border-amber-200 rounded-xl p-3">
+              <p className="text-amber-700 text-xs font-semibold">⚠ Bring this slip on exam day. Upload payment proof if required by your centre.</p>
+            </div>
+          )}
+        </div>
+      ) : null}
+      {toast && <Toast message={toast.msg} type={toast.type} onClose={() => setToast(null)} />}
+    </div>
+  );
+
   if (!registrations.length) return (
     <EmptyState icon={ClipboardList} title="No registrations" description="Register for an exam to see it here." />
   );
@@ -130,6 +209,8 @@ function MyRegistrations() {
     <div className="space-y-3">
       {registrations.map((reg) => {
         const meta = STATUS_META[reg.status] || STATUS_META.upcoming;
+        const needsProof = reg.status === 'registered';
+        const fileRef = { current: null };
         return (
           <div key={reg.id} className="reads-card p-4">
             <div className="flex items-start justify-between mb-2">
@@ -139,18 +220,35 @@ function MyRegistrations() {
               </div>
               <Badge label={meta.label} variant={meta.variant} />
             </div>
-            <div className="flex items-center gap-2 text-reads-muted text-sm">
+            <div className="flex items-center gap-2 text-reads-muted text-sm mb-2">
               <Calendar size={14} />
               <span>{new Date(reg.exam_date).toLocaleDateString()}</span>
             </div>
             {reg.seat_number && (
-              <div className="mt-2 bg-reads-green-bg rounded-xl px-3 py-2 inline-flex items-center gap-2">
+              <div className="mb-3 bg-reads-green-bg rounded-xl px-3 py-2 inline-flex items-center gap-2">
                 <span className="text-reads-green text-xs font-bold">Seat: {reg.seat_number}</span>
               </div>
             )}
+            <div className="flex gap-2 mt-2">
+              <button onClick={() => viewSlip(reg)}
+                className="flex items-center gap-1.5 text-xs font-bold text-reads-navy bg-gray-100 px-3 py-2 rounded-xl">
+                <FileText size={13} /> View Slip
+              </button>
+              {needsProof && (
+                <>
+                  <label className="flex items-center gap-1.5 text-xs font-bold text-white bg-reads-green px-3 py-2 rounded-xl cursor-pointer">
+                    {uploading === reg.id ? <Loader2 size={13} className="animate-spin" /> : <Upload size={13} />}
+                    Upload Proof
+                    <input type="file" accept="image/*,.pdf" className="hidden"
+                      onChange={e => e.target.files?.[0] && uploadProof(reg, e.target.files[0])} />
+                  </label>
+                </>
+              )}
+            </div>
           </div>
         );
       })}
+      {toast && <Toast message={toast.msg} type={toast.type} onClose={() => setToast(null)} />}
     </div>
   );
 }

@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import {
   LayoutDashboard, Users, Wallet, Settings,
   ClipboardList, MapPin, Loader2, CheckCircle,
-  XCircle, LogOut, Edit2
+  XCircle, LogOut, Edit2, Calendar, Eye
 } from 'lucide-react';
 import { api } from '../../services/api.js';
 
@@ -141,10 +141,73 @@ function CbtProfileEdit({ profile, onSaved }) {
   );
 }
 
+
+// ── CBT Exam Registrations ────────────────────────────────────────────────────
+function CbtExamsSection({ centreId }) {
+  const [registrations, setRegistrations] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [toast, setToast] = useState(null);
+  const showToast = (msg, type="success") => { setToast({msg,type}); setTimeout(()=>setToast(null),3500); };
+
+  useEffect(() => {
+    // CBT centres see registrations for their exam windows
+    api.admin.getExamRegistrations({ status: "proof_uploaded" })
+      .then(d => setRegistrations(d?.registrations || []))
+      .catch(() => {})
+      .finally(() => setLoading(false));
+  }, []);
+
+  if (loading) return (
+    <div className="flex justify-center py-14"><Loader2 size={24} className="animate-spin text-reads-green" /></div>
+  );
+
+  return (
+    <div className="px-4 pt-2 pb-4 animate-fade-in">
+      <div className="mb-4">
+        <h2 className="font-black text-reads-navy text-lg">Registrations</h2>
+        <p className="text-reads-muted text-xs">Students registered for your exams</p>
+      </div>
+      {registrations.length === 0 ? (
+        <div className="flex flex-col items-center py-14 text-center">
+          <div className="w-16 h-16 bg-gray-100 rounded-2xl flex items-center justify-center mb-4">
+            <ClipboardList size={28} className="text-gray-400" />
+          </div>
+          <p className="font-bold text-reads-navy text-sm">No pending proofs</p>
+          <p className="text-reads-muted text-xs mt-1">Students who upload payment proof will appear here.</p>
+        </div>
+      ) : (
+        <div className="space-y-3">
+          {registrations.map(r => (
+            <div key={r.id} className="reads-card px-4 py-3">
+              <div className="flex items-start justify-between gap-2 mb-2">
+                <div>
+                  <p className="font-bold text-reads-navy text-sm">{r.student_name}</p>
+                  <p className="text-reads-muted text-xs">{r.exam_type} · Seat {r.seat_number}</p>
+                  <p className="text-reads-muted text-xs">{r.exam_date ? new Date(r.exam_date).toLocaleDateString() : ""}</p>
+                </div>
+                <span className="text-[10px] bg-amber-50 text-amber-600 font-bold px-2 py-1 rounded-full">Proof Uploaded</span>
+              </div>
+              {r.proof_url && (
+                <a href={r.proof_url} target="_blank" rel="noopener noreferrer"
+                  className="text-xs text-reads-green font-bold flex items-center gap-1 mb-2">
+                  <Eye size={12} /> View Proof
+                </a>
+              )}
+              <p className="text-reads-muted text-xs">Contact admin to verify and confirm this registration.</p>
+            </div>
+          ))}
+        </div>
+      )}
+      {toast && <Toast msg={toast.msg} type={toast.type} onClose={() => setToast(null)} />}
+    </div>
+  );
+}
+
 // ── Nav ───────────────────────────────────────────────────────────────────────
 const NAV_ITEMS = [
-  { key: 'overview', label: 'Overview', icon: LayoutDashboard },
-  { key: 'wallet',   label: 'Wallet',   icon: Wallet },
+  { key: 'overview',      label: 'Overview',  icon: LayoutDashboard },
+  { key: 'registrations', label: 'Students',  icon: ClipboardList },
+  { key: 'wallet',        label: 'Wallet',    icon: Wallet },
 ];
 
 // ── Main ──────────────────────────────────────────────────────────────────────
@@ -196,6 +259,7 @@ export default function CbtModule({ user, onLogout }) {
         {section === 'profile' && (
           <CbtProfileEdit profile={profile} onSaved={() => setSection('overview')} />
         )}
+        {section === 'registrations' && <CbtExamsSection />}
         {section === 'wallet' && (
           <div className="px-4 pt-4">
             <p className="font-black text-reads-navy text-lg mb-2">Wallet</p>
