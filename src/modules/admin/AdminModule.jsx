@@ -930,6 +930,310 @@ function ExamSection() {
   );
 }
 
+
+// ─────────────────────────────────────────────
+// Tournament Section
+// ─────────────────────────────────────────────
+function TournamentSection() {
+  const [tab, setTab] = useState("tournaments");
+  const [tournaments, setTournaments] = useState([]);
+  const [flags, setFlags] = useState([]);
+  const [leaderboard, setLeaderboard] = useState([]);
+  const [selectedTournament, setSelectedTournament] = useState(null);
+  const [standings, setStandings] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [showCreate, setShowCreate] = useState(false);
+  const [lbType, setLbType] = useState("unaffiliated");
+  const [schools, setSchools] = useState([]);
+  const [selectedSchool, setSelectedSchool] = useState("");
+  const [selectedUsers, setSelectedUsers] = useState([]);
+  const [form, setForm] = useState({
+    name: "", stage: "school", age_category: "u17",
+    duration_days: 14, start_date: "", school_id: "", state: ""
+  });
+  const [saving, setSaving] = useState(false);
+  const [toast, setToast] = useState(null);
+  const showToast = (msg, type="success") => { setToast({msg,type}); setTimeout(()=>setToast(null),3500); };
+
+  const loadTournaments = () => {
+    api.admin.listTournaments()
+      .then(d => setTournaments(d?.tournaments || []))
+      .catch(() => {})
+      .finally(() => setLoading(false));
+  };
+
+  const loadFlags = () => {
+    api.admin.getCheatFlags({ status: "pending" })
+      .then(d => setFlags(d?.flags || []))
+      .catch(() => {});
+  };
+
+  const loadLeaderboard = async () => {
+    try {
+      const params = lbType === "unaffiliated"
+        ? { unaffiliated: true }
+        : { school_id: selectedSchool };
+      if (lbType === "school" && !selectedSchool) return;
+      const d = await api.admin.getTournamentLeaderboard(params);
+      setLeaderboard(d?.users || []);
+    } catch (e) { showToast("Failed to load leaderboard", "error"); }
+  };
+
+  useEffect(() => {
+    loadTournaments();
+    loadFlags();
+    api.admin.getSchools().then(d => setSchools(d?.schools || [])).catch(() => {});
+  }, []);
+
+  useEffect(() => { loadLeaderboard(); }, [lbType, selectedSchool]);
+
+  const toggleUser = (user) => {
+    setSelectedUsers(prev =>
+      prev.find(u => u.id === user.id)
+        ? prev.filter(u => u.id !== user.id)
+        : [...prev, user]
+    );
+  };
+
+  const handleCreate = async () => {
+    if (!form.name || selectedUsers.length === 0) return showToast("Fill name and select participants", "error");
+    setSaving(true);
+    try {
+      const res = await api.admin.createTournament({
+        ...form,
+        participant_ids: selectedUsers.map(u => u.id),
+      });
+      showToast(res.message || "Tournament created!");
+      setShowCreate(false);
+      setSelectedUsers([]);
+      loadTournaments();
+    } catch (e) { showToast(e.message || "Failed", "error"); }
+    finally { setSaving(false); }
+  };
+
+  const handleReviewFlag = async (id, verdict) => {
+    try {
+      await api.admin.reviewCheatFlag(id, { verdict });
+      showToast(`Flag marked as ${verdict}`);
+      loadFlags();
+    } catch (e) { showToast(e.message || "Failed", "error"); }
+  };
+
+  const viewStandings = async (t) => {
+    setSelectedTournament(t);
+    try {
+      const d = await api.admin.getTournamentStandings(t.id);
+      setStandings(d?.standings || []);
+    } catch { showToast("Failed to load standings", "error"); }
+  };
+
+  const handleQualifyTop3 = async () => {
+    if (!confirm("Qualify top 3 and close this tournament?")) return;
+    try {
+      const res = await api.admin.qualifyTop3(selectedTournament.id);
+      showToast(res.message || "Done");
+      setSelectedTournament(null);
+      loadTournaments();
+    } catch (e) { showToast(e.message || "Failed", "error"); }
+  };
+
+  const STAGES = ["school","state","national","global"];
+  const CATEGORIES = ["u15","u17","u21","open"];
+  const stageColor = { school:"green", state:"gold", national:"navy", global:"red" };
+
+  if (selectedTournament) return (
+    <div className="px-4 pt-2 pb-4 animate-fade-in">
+      <button onClick={() => setSelectedTournament(null)} className="flex items-center gap-1 text-reads-muted text-sm mb-3">← Back</button>
+      <SectionHeader title={selectedTournament.name} subtitle={`${selectedTournament.stage} · ${selectedTournament.age_category?.toUpperCase()}`} />
+      <div className="space-y-2 mb-4">
+        {standings.map(s => (
+          <div key={s.participant_id} className={`reads-card px-4 py-3 flex items-center gap-3 ${s.rank<=3 ? 'border-l-4 border-reads-gold':''}`}>
+            <span className={`font-black text-lg w-8 text-center ${s.rank===1?'text-reads-gold':s.rank===2?'text-gray-400':s.rank===3?'text-amber-700':'text-reads-muted'}`}>
+              {s.rank <= 3 ? ["🥇","🥈","🥉"][s.rank-1] : s.rank}
+            </span>
+            <div className="flex-1">
+              <p className="font-bold text-reads-navy text-sm">{s.full_name}</p>
+              <p className="text-reads-muted text-xs">{s.quizzes_taken} quizzes · {Math.floor(s.total_time_secs/60)}m total</p>
+            </div>
+            <div className="text-right">
+              <p className="font-black text-reads-navy">{s.total_points}pts</p>
+              {s.cheat_flags > 0 && <p className="text-red-500 text-[10px]">⚠ {s.cheat_flags} flags</p>}
+              {s.qualified_next && <p className="text-reads-green text-[10px] font-bold">✓ Qualified</p>}
+            </div>
+          </div>
+        ))}
+      </div>
+      {selectedTournament.status === "active" && (
+        <button onClick={handleQualifyTop3} className="w-full bg-reads-gold text-reads-navy font-bold py-3 rounded-xl">
+          🏆 Qualify Top 3 & Close Tournament
+        </button>
+      )}
+      {toast && <Toast message={toast.msg} type={toast.type} onClose={() => setToast(null)} />}
+    </div>
+  );
+
+  return (
+    <div className="px-4 pt-2 pb-4 animate-fade-in">
+      <div className="flex gap-2 mb-4 flex-wrap">
+        {[["tournaments","Tournaments"],["create","Create"],["flags",`Flags${flags.length>0?` (${flags.length})`:""}`]].map(([k,l]) => (
+          <button key={k} onClick={() => setTab(k)}
+            className={`text-xs font-bold px-3 py-2 rounded-xl ${tab===k?"bg-reads-navy text-white":"bg-gray-100 text-reads-muted"}`}>
+            {l}
+          </button>
+        ))}
+      </div>
+
+      {tab === "tournaments" && (
+        <>
+          {loading ? <LoadingOverlay /> : tournaments.length === 0 ? (
+            <EmptyState icon={Trophy} title="No tournaments yet" description="Create the first Smart User Challenge." />
+          ) : (
+            <div className="space-y-2">
+              {tournaments.map(t => (
+                <button key={t.id} onClick={() => viewStandings(t)}
+                  className="w-full reads-card px-4 py-3 text-left hover:bg-gray-50 transition-colors">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <p className="font-bold text-reads-navy text-sm">{t.name}</p>
+                      <p className="text-reads-muted text-xs">{t.stage} · {t.age_category?.toUpperCase()} · {t.participant_count} participants</p>
+                    </div>
+                    <Badge label={t.status} variant={t.status==="active"?"green":"gray"} />
+                  </div>
+                </button>
+              ))}
+            </div>
+          )}
+        </>
+      )}
+
+      {tab === "create" && (
+        <div className="space-y-4">
+          <p className="font-black text-reads-navy text-sm">New Tournament</p>
+          <div className="reads-card px-4 py-4 space-y-3">
+            <div>
+              <label className="reads-label">Tournament Name</label>
+              <input className="reads-input" placeholder="e.g. Matro School Challenge Q2 2025"
+                value={form.name} onChange={e => setForm(f=>({...f,name:e.target.value}))} />
+            </div>
+            <div className="grid grid-cols-2 gap-2">
+              <div>
+                <label className="reads-label">Stage</label>
+                <select className="reads-input" value={form.stage}
+                  onChange={e => setForm(f=>({...f,stage:e.target.value}))}>
+                  {STAGES.map(s => <option key={s} value={s}>{s.charAt(0).toUpperCase()+s.slice(1)}</option>)}
+                </select>
+              </div>
+              <div>
+                <label className="reads-label">Age Category</label>
+                <select className="reads-input" value={form.age_category}
+                  onChange={e => setForm(f=>({...f,age_category:e.target.value}))}>
+                  {CATEGORIES.map(c => <option key={c} value={c}>{c.toUpperCase()}</option>)}
+                </select>
+              </div>
+            </div>
+            <div className="grid grid-cols-2 gap-2">
+              <div>
+                <label className="reads-label">Duration (days)</label>
+                <input className="reads-input" type="number" value={form.duration_days}
+                  onChange={e => setForm(f=>({...f,duration_days:parseInt(e.target.value)}))} />
+              </div>
+              <div>
+                <label className="reads-label">Start Date</label>
+                <input className="reads-input" type="date" value={form.start_date}
+                  onChange={e => setForm(f=>({...f,start_date:e.target.value}))} />
+              </div>
+            </div>
+          </div>
+
+          {/* Leaderboard to pick participants */}
+          <div className="reads-card px-4 py-4 space-y-3">
+            <p className="font-bold text-reads-navy text-sm">Select Participants</p>
+            <div className="flex gap-2">
+              <button onClick={() => setLbType("unaffiliated")}
+                className={`text-xs font-bold px-3 py-2 rounded-xl ${lbType==="unaffiliated"?"bg-reads-navy text-white":"bg-gray-100 text-reads-muted"}`}>
+                Unaffiliated Top 10
+              </button>
+              <button onClick={() => setLbType("school")}
+                className={`text-xs font-bold px-3 py-2 rounded-xl ${lbType==="school"?"bg-reads-navy text-white":"bg-gray-100 text-reads-muted"}`}>
+                School Top 10
+              </button>
+            </div>
+            {lbType === "school" && (
+              <select className="reads-input" value={selectedSchool}
+                onChange={e => setSelectedSchool(e.target.value)}>
+                <option value="">— Select school —</option>
+                {schools.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
+              </select>
+            )}
+            <div className="space-y-1.5 max-h-64 overflow-y-auto">
+              {leaderboard.map((u, i) => {
+                const selected = selectedUsers.find(s => s.id === u.id);
+                return (
+                  <button key={u.id} onClick={() => toggleUser(u)}
+                    className={`w-full flex items-center gap-3 px-3 py-2 rounded-xl border-2 transition-colors ${selected?"border-reads-green bg-reads-green-bg":"border-gray-100 bg-white"}`}>
+                    <span className="font-black text-reads-muted w-6 text-sm">#{i+1}</span>
+                    <div className="flex-1 text-left">
+                      <p className="font-bold text-reads-navy text-sm">{u.full_name}</p>
+                      <p className="text-reads-muted text-xs">{u.lessons_completed} lessons · {u.quizzes_taken} quizzes</p>
+                    </div>
+                    {selected && <CheckCircle size={16} className="text-reads-green flex-shrink-0" />}
+                  </button>
+                );
+              })}
+            </div>
+            {selectedUsers.length > 0 && (
+              <p className="text-reads-green text-xs font-bold">{selectedUsers.length} participants selected</p>
+            )}
+          </div>
+
+          <button onClick={handleCreate} disabled={saving || !form.name || selectedUsers.length === 0}
+            className="reads-btn-primary w-full flex items-center justify-center gap-2">
+            {saving && <Loader2 size={16} className="animate-spin" />}
+            🏆 Launch Tournament & Send Invites
+          </button>
+        </div>
+      )}
+
+      {tab === "flags" && (
+        <>
+          {flags.length === 0 ? (
+            <EmptyState icon={Flag} title="No pending flags" description="Anti-cheat flags will appear here for review." />
+          ) : (
+            <div className="space-y-3">
+              {flags.map(f => (
+                <div key={f.id} className="reads-card px-4 py-3">
+                  <div className="flex items-start justify-between gap-2 mb-2">
+                    <div>
+                      <p className="font-bold text-reads-navy text-sm">{f.full_name}</p>
+                      <p className="text-reads-muted text-xs capitalize">{f.flag_type?.replace(/_/g," ")}</p>
+                      <p className="text-reads-muted text-xs">{new Date(f.created_at).toLocaleString()}</p>
+                    </div>
+                    <span className="text-[10px] bg-amber-50 text-amber-600 font-bold px-2 py-1 rounded-full">Pending</span>
+                  </div>
+                  {f.flag_data?.screenshot && (
+                    <img src={f.flag_data.screenshot} alt="flag" className="w-full h-24 object-cover rounded-xl mb-2" />
+                  )}
+                  <div className="flex gap-2">
+                    <button onClick={() => handleReviewFlag(f.id, "guilty")}
+                      className="flex-1 text-xs font-bold bg-red-500 text-white py-2 rounded-xl flex items-center justify-center gap-1">
+                      <XCircle size={13} /> Guilty
+                    </button>
+                    <button onClick={() => handleReviewFlag(f.id, "cleared")}
+                      className="flex-1 text-xs font-bold bg-reads-green text-white py-2 rounded-xl flex items-center justify-center gap-1">
+                      <CheckCircle size={13} /> Clear
+                    </button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </>
+      )}
+      {toast && <Toast message={toast.msg} type={toast.type} onClose={() => setToast(null)} />}
+    </div>
+  );
+}
+
 // ─────────────────────────────────────────────
 // Audit Log Section
 // ─────────────────────────────────────────────
@@ -1130,6 +1434,7 @@ const ADMIN_NAV = [
   { key: 'lessons',       label: 'Lessons',      icon: BookOpen },
   { key: 'applications',  label: 'Applications', icon: Building2 },
   { key: 'edit-requests', label: 'Requests',     icon: Edit2 },
+  { key: 'tournament',   label: 'Challenge',    icon: Trophy },
   { key: 'exams',        label: 'Exams',        icon: ClipboardList },
   { key: 'quiz',         label: 'Quiz',         icon: HelpCircle },
   { key: 'curriculum',  label: 'Curriculum',  icon: FileText },
@@ -1176,6 +1481,7 @@ export default function AdminModule({ currentUserId }) {
       {section === 'edit-requests' && <EditRequestsSection />}
       {section === 'notifications' && <NotificationsSection />}
       {section === 'audit-log'     && <AuditLogSection />}
+      {section === 'tournament'    && <TournamentSection />}
       {section === 'exams'         && <ExamSection />}
       {section === 'quiz'          && <QuizSection />}
       {section === 'curriculum'    && <SchoolCurriculumSection />}

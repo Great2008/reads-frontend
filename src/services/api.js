@@ -150,6 +150,13 @@ export const students = {
   applyTrack: (track) => post('/students/tracks/apply', { track }),
   getProgress: () => get('/students/progress'),
   getPromotionHistory: () => get('/students/promotion-history'),
+  // Tournament
+  getMyTournament: () => get('/tournaments/my-invite'),
+  joinTournament: (data) => post('/tournaments/join', data),
+  startTournamentQuiz: (id) => post(`/tournaments/${id}/start-quiz`, {}),
+  submitTournamentQuiz: (id, data) => post(`/tournaments/${id}/submit-quiz`, data),
+  getTournamentStandings: (id) => get(`/tournaments/${id}/standings`),
+  submitCheatFlag: (data) => post('/tournaments/flag', data),
   getMyResults: (params = {}) => {
     const q = new URLSearchParams(params).toString();
     return get(`/students/results${q ? '?' + q : ''}`);
@@ -452,6 +459,20 @@ export const admin = {
   },
   verifyExamProof: (id, data) => post(`/admin/exams/registrations/${id}/verify`, data),
   releaseExamEscrow: (id) => post(`/admin/exams/registrations/${id}/release-escrow`, {}),
+  // Tournament
+  listTournaments: () => get('/admin/tournaments/list'),
+  createTournament: (data) => post('/admin/tournaments/admin/create', data),
+  getTournamentLeaderboard: (params={}) => {
+    const q = new URLSearchParams(params).toString();
+    return get(`/admin/tournaments/admin/leaderboard${q ? '?' + q : ''}`);
+  },
+  getTournamentStandings: (id) => get(`/admin/tournaments/admin/${id}/standings`),
+  qualifyTop3: (id) => post(`/admin/tournaments/admin/${id}/qualify-top3`, {}),
+  getCheatFlags: (params={}) => {
+    const q = new URLSearchParams(params).toString();
+    return get(`/admin/tournaments/admin/flags${q ? '?' + q : ''}`);
+  },
+  reviewCheatFlag: (id, data) => patch(`/admin/tournaments/admin/flags/${id}/review`, data),
   getSchools: () => get('/admin/schools'),
   getSchoolCurriculum: (school_id) => get(`/admin/schools/${school_id}/curriculum`),
   getAuditLog: (params = {}) => {
@@ -517,6 +538,33 @@ const upload = async (path, formData) => {
   return res.json();
 };
 // ── Single export ──────────────────────────────────────────────────────────────
+
+// ── Tournament / Smart User Challenge ─────────────────────────────────────────
+export const tournament = {
+  // Student
+  getMyInvite: () => get('/tournaments/my-invite'),
+  join: (data) => post('/tournaments/join', data),
+  startQuiz: (tournament_id) => post(`/tournaments/${tournament_id}/start-quiz`, {}),
+  submitQuiz: (tournament_id, data) => post(`/tournaments/${tournament_id}/submit-quiz`, data),
+  getStandings: (tournament_id) => get(`/tournaments/${tournament_id}/standings`),
+  submitFlag: (data) => post('/tournaments/flag', data),
+
+  // Admin
+  getLeaderboard: (params = {}) => {
+    const q = new URLSearchParams(params).toString();
+    return get(`/tournaments/admin/leaderboard${q ? '?' + q : ''}`);
+  },
+  create: (data) => post('/tournaments/admin/create', data),
+  list: () => get('/tournaments/admin/list'),
+  getAdminStandings: (id) => get(`/tournaments/admin/${id}/standings`),
+  qualifyTop3: (id) => post(`/tournaments/admin/${id}/qualify-top3`, {}),
+  getFlags: (params = {}) => {
+    const q = new URLSearchParams(params).toString();
+    return get(`/tournaments/admin/flags${q ? '?' + q : ''}`);
+  },
+  reviewFlag: (flag_id, data) => patch(`/tournaments/admin/flags/${flag_id}/review`, data),
+};
+
 export const api = {
   // Base HTTP methods
   get,
@@ -540,4 +588,5 @@ export const api = {
   admin,
   partner,
   tutorPortal,
+  tournament,
 };

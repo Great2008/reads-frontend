@@ -21,6 +21,7 @@ import SettingsModule       from './modules/settings/SettingsModule.jsx';
 import NotificationInbox    from './modules/notifications/NotificationInbox.jsx';
 import SchoolModule         from './modules/school/SchoolModule.jsx';
 import StudentPortalModule  from './modules/school/StudentPortalModule.jsx';
+import ChallengeModule      from './modules/challenges/ChallengeModule.jsx';
 import TutorsModule         from './modules/tutors/TutorsModule.jsx';
 import ExamsModule          from './modules/exams/ExamsModule.jsx';
 import MarketplaceModule    from './modules/marketplace/MarketplaceModule.jsx';
@@ -36,6 +37,7 @@ const MoreModule = ({ onNavigate }) => {
   const tiles = [
     { label: 'My School',   icon: School,       view: 'school',      color: '#16A34A', bg: '#f0fdf4' },
     { label: 'My Results',  icon: Award,        view: 'student-portal', color: '#0D1F3C', bg: '#f0fdf4' },
+    { label: 'Challenge',    icon: Trophy,       view: 'challenge',     color: '#FFD700', bg: '#1a2a4a' },
     { label: 'Tutors',      icon: GraduationCap, view: 'tutors',     color: '#6366F1', bg: '#eef2ff' },
     { label: 'Exams',       icon: ClipboardList, view: 'exams',      color: '#0D7A6E', bg: '#f0fdfa' },
     { label: 'Marketplace', icon: ShoppingBag,   view: 'marketplace',color: '#D4A017', bg: '#fffbeb' },
@@ -281,6 +283,9 @@ export default function App() {
         )}
         {view === 'student-portal' && (
           <StudentPortalModule onBack={() => navigate('more')} />
+        )}
+        {view === 'challenge' && (
+          <ChallengeModule onBack={() => navigate('more')} />
         )}
 
         {view === 'tutors' && (
