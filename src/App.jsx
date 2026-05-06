@@ -26,7 +26,6 @@ import TutorsModule         from './modules/tutors/TutorsModule.jsx';
 import ExamsModule          from './modules/exams/ExamsModule.jsx';
 import MarketplaceModule    from './modules/marketplace/MarketplaceModule.jsx';
 import AITutorModule        from './modules/ai-tutor/AITutorModule.jsx';
-import ChallengesModule     from './modules/challenges/ChallengesModule.jsx';
 import AdminModule          from './modules/admin/AdminModule.jsx';
 import PartnerModule        from './modules/partner/PartnerModule.jsx';
 
@@ -42,7 +41,6 @@ const MoreModule = ({ onNavigate }) => {
     { label: 'Exams',       icon: ClipboardList, view: 'exams',      color: '#0D7A6E', bg: '#f0fdfa' },
     { label: 'Marketplace', icon: ShoppingBag,   view: 'marketplace',color: '#D4A017', bg: '#fffbeb' },
     { label: 'AI Tutor',    icon: Sparkles,      view: 'ai-tutor',   color: '#7C3AED', bg: '#f5f3ff' },
-    { label: 'Challenges',  icon: Trophy,        view: 'challenges', color: '#D97706', bg: '#fffbeb' },
     { label: 'Notifications',icon: Bell,         view: 'notifications',color: '#F59E0B', bg: '#fff7ed' },
     { label: 'Settings',    icon: SettingsIcon,  view: 'settings',   color: '#6B7280', bg: '#f9fafb' },
   ];
@@ -298,10 +296,6 @@ export default function App() {
 
         {view === 'marketplace' && (
           <MarketplaceModule tokenBalance={tokenBalance} onUpdateBalance={setTokenBalance} />
-        )}
-
-        {view === 'challenges' && (
-          <ChallengesModule user={user} tokenBalance={tokenBalance} onUpdateBalance={setTokenBalance} />
         )}
 
         {view === 'notifications' && (

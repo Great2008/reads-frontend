@@ -4,7 +4,7 @@ import {
   XCircle, Loader2, ChevronRight, AlertTriangle, Building2,
   GraduationCap, Settings, ClipboardList, Sparkles, Eye,
   Edit2, Trash2, Plus, Search, ArrowLeft, RefreshCw,
-  HelpCircle, FileText, School
+  HelpCircle, FileText, School, Trophy
 } from 'lucide-react';
 import { api } from '../../services/api.js';
 import {

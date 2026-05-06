@@ -163,7 +163,6 @@ export const students = {
   },
   getMyFees: () => get('/students/fees'),
   payFee: (fee_id) => post(`/students/fees/${fee_id}/pay`, {}),
-  lookupSchool: (code) => get(`/students/school/lookup?code=${encodeURIComponent(code)}`, false),
 };
 
 // ── Notifications ─────────────────────────────────────────────────────────────
@@ -450,31 +449,28 @@ export const admin = {
   // School Curriculum (admin view)
   getSchoolCurriculum: (school_id) => get(`/admin/schools/${school_id}/curriculum`),
 
-  // Audit Log
-  getExamWindows: () => get('/admin/exams/windows'),
-  createExamWindow: (data) => post('/admin/exams/windows', data),
-  getExamRegistrations: (params={}) => {
-    const q = new URLSearchParams(params).toString();
-    return get(`/admin/exams/registrations${q ? '?' + q : ''}`);
-  },
-  verifyExamProof: (id, data) => post(`/admin/exams/registrations/${id}/verify`, data),
+  // Exam escrow (additional action not covered above)
   releaseExamEscrow: (id) => post(`/admin/exams/registrations/${id}/release-escrow`, {}),
+
   // Tournament
   listTournaments: () => get('/admin/tournaments/list'),
   createTournament: (data) => post('/admin/tournaments/admin/create', data),
-  getTournamentLeaderboard: (params={}) => {
+  getTournamentLeaderboard: (params = {}) => {
     const q = new URLSearchParams(params).toString();
     return get(`/admin/tournaments/admin/leaderboard${q ? '?' + q : ''}`);
   },
   getTournamentStandings: (id) => get(`/admin/tournaments/admin/${id}/standings`),
   qualifyTop3: (id) => post(`/admin/tournaments/admin/${id}/qualify-top3`, {}),
-  getCheatFlags: (params={}) => {
+  getCheatFlags: (params = {}) => {
     const q = new URLSearchParams(params).toString();
     return get(`/admin/tournaments/admin/flags${q ? '?' + q : ''}`);
   },
   reviewCheatFlag: (id, data) => patch(`/admin/tournaments/admin/flags/${id}/review`, data),
+
+  // Schools
   getSchools: () => get('/admin/schools'),
-  getSchoolCurriculum: (school_id) => get(`/admin/schools/${school_id}/curriculum`),
+
+  // Audit Log
   getAuditLog: (params = {}) => {
     const qs = new URLSearchParams(params).toString();
     return get(`/admin/audit${qs ? `?${qs}` : ''}`);

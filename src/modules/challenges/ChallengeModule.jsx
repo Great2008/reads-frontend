@@ -499,8 +499,7 @@ export default function ChallengeModule({ onBack }) {
         <Trophy size={20} className="text-reads-gold ml-auto" />
       </div>
 
-      {screen === 'not-invited' && !tournament && <NotInvitedScreen />}
-      {screen === 'not-invited' && <JoinScreen onJoined={handleJoined} />}
+      {screen === 'not-invited' && <NotInvitedScreen />}
       {screen === 'join' && <JoinScreen onJoined={handleJoined} />}
       {screen === 'dashboard' && tournament && (
         <Dashboard
