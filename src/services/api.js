@@ -327,10 +327,32 @@ export const marketplace = {
     const qs = new URLSearchParams(params).toString();
     return get(`/marketplace${qs ? `?${qs}` : ''}`);
   },
-  get: (item_id) => get(`/marketplace/${item_id}`),
+  get: (item_id) => get(`/marketplace/item/${item_id}`),
   buy: (item_id) => post(`/marketplace/${item_id}/buy`, {}),
-  list_item: (data) => post('/marketplace', data),
+
+  // Multipart form — supports optional file attachment
+  list_item: async (data, file = null) => {
+    const token = localStorage.getItem('access_token');
+    const form = new FormData();
+    form.append('title', data.title);
+    form.append('category', data.category);
+    form.append('price_tokens', String(data.price_tokens));
+    if (data.description) form.append('description', data.description);
+    if (data.exam_type) form.append('exam_type', data.exam_type);
+    if (file) form.append('file', file);
+    const res = await fetch(`${API_URL}/marketplace`, {
+      method: 'POST',
+      headers: token ? { 'Authorization': `Bearer ${token}` } : {},
+      body: form,
+    });
+    if (!res.ok) await handleError(res, 'list item');
+    return res.json();
+  },
+
   delist: (item_id) => del(`/marketplace/${item_id}`),
+  myPurchases: () => get('/marketplace/my/purchases'),
+  myListings: () => get('/marketplace/my/listings'),
+  downloadUrl: (item_id) => `${API_URL}/marketplace/${item_id}/download`,
 };
 
 // ── AI Tutor ──────────────────────────────────────────────────────────────────
