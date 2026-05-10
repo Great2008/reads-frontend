@@ -212,11 +212,24 @@ function QuizView({ lessonId, lessonTitle, quizCount, tokenReward, onDone, onBac
 // ─────────────────────────────────────────────
 // Lesson Detail View
 // ─────────────────────────────────────────────
-function LessonDetail({ lesson, onBack, onQuizDone }) {
+function LessonDetail({ lesson: lessonMeta, onBack, onQuizDone }) {
+  const [lesson, setLesson] = useState(lessonMeta);
+  const [contentLoading, setContentLoading] = useState(!lessonMeta.content);
   const [tab, setTab] = useState('content'); // content | quiz
   const [readSeconds, setReadSeconds] = useState(0);
   const [canQuiz, setCanQuiz] = useState(false);
   const startRef = useRef(Date.now());
+
+  // Fetch full lesson content if not already loaded
+  useEffect(() => {
+    if (!lessonMeta.content) {
+      setContentLoading(true);
+      api.lessons.get(lessonMeta.id)
+        .then(full => setLesson(full))
+        .catch(() => {})
+        .finally(() => setContentLoading(false));
+    }
+  }, [lessonMeta.id]);
 
   // Track reading time — need min 30s before quiz
   useEffect(() => {
@@ -227,12 +240,12 @@ function LessonDetail({ lesson, onBack, onQuizDone }) {
     }, 1000);
     return () => {
       clearInterval(interval);
-      api.lessons.updateProgress(lesson.id, {
+      api.lessons.updateProgress(lessonMeta.id, {
         status: 'in_progress',
         read_duration_secs: Math.floor((Date.now() - startRef.current) / 1000),
       }).catch(() => {});
     };
-  }, [lesson.id]);
+  }, [lessonMeta.id]);
 
   if (tab === 'quiz') {
     return (
@@ -270,10 +283,18 @@ function LessonDetail({ lesson, onBack, onQuizDone }) {
 
       {/* Content */}
       <div className="flex-1 overflow-y-auto px-4 py-4">
-        <div
-          className="prose prose-sm max-w-none text-reads-navy leading-relaxed"
-          dangerouslySetInnerHTML={{ __html: lesson.content }}
-        />
+        {contentLoading ? (
+          <div className="flex items-center justify-center py-16">
+            <Loader2 size={28} className="animate-spin text-reads-green" />
+          </div>
+        ) : lesson.content ? (
+          <div
+            className="prose prose-sm max-w-none text-reads-navy leading-relaxed"
+            dangerouslySetInnerHTML={{ __html: lesson.content }}
+          />
+        ) : (
+          <p className="text-reads-muted text-sm text-center py-12">No content available for this lesson yet.</p>
+        )}
       </div>
 
       {/* Take Quiz CTA */}
