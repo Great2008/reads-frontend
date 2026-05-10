@@ -413,6 +413,7 @@ export const admin = {
   },
   createLesson: (data) => post('/admin/lessons', data),
   updateLesson: (lesson_id, data) => patch(`/admin/lessons/${lesson_id}`, data),
+  deleteLesson: (lesson_id) => del(`/admin/lessons/${lesson_id}`),
   toggleCooldown: (lesson_id) => post(`/admin/lessons/${lesson_id}/cooldown`, {}),
   publishLesson: (lesson_id) => post(`/admin/lessons/${lesson_id}/publish`, {}),
   aiGenerate: (data) => post('/admin/lessons/ai-generate', data),

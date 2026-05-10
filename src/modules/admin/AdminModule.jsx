@@ -231,6 +231,15 @@ function LessonsSection() {
     } catch (e) { showToast(e.message || 'Failed', 'error'); }
   };
 
+  const handleDeleteLesson = async (id) => {
+    if (!window.confirm('Delete this lesson? This cannot be undone.')) return;
+    try {
+      await api.admin.deleteLesson(id);
+      showToast('Lesson deleted.');
+      loadLessons();
+    } catch (e) { showToast(e.message || 'Failed to delete', 'error'); }
+  };
+
   const handleEdit = (lesson) => {
     setEditLesson(lesson);
     setEditForm({
@@ -239,7 +248,9 @@ function LessonsSection() {
       content: lesson.content || '',
       class_name: lesson.class_name || '',
       track: lesson.track || 'school',
-      token_reward: lesson.token_reward || 5,
+      token_reward: lesson.token_reward || 10,
+      is_general: lesson.is_general || false,
+      school_id: lesson.school_id || null,
     });
   };
 
@@ -296,16 +307,21 @@ function LessonsSection() {
           <EmptyState icon={BookOpen} title="No lessons yet" />
         ) : (
           lessons.map((l) => (
-            <div key={l.id} className="reads-card px-4 py-3 flex items-center gap-3">
-              <div className="flex-1 min-w-0">
-                <p className="font-bold text-reads-navy text-sm truncate">{l.title}</p>
-                <p className="text-reads-muted text-xs">{l.subject} · {l.track?.toUpperCase()}</p>
+            <div key={l.id} className="reads-card px-4 py-3 mb-2">
+              <div className="flex items-start gap-2">
+                <div className="flex-1 min-w-0">
+                  <p className="font-bold text-reads-navy text-sm truncate">{l.title}</p>
+                  <p className="text-reads-muted text-xs">{l.subject} · {l.track?.toUpperCase()}</p>
+                  <p className="text-reads-muted text-xs mt-0.5">
+                    {new Date(l.created_at).toLocaleDateString('en-NG', { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' })}
+                  </p>
+                </div>
+                <Badge label={l.status?.toUpperCase()} variant={STATUS_COLOR[l.status] || 'gray'} />
               </div>
-              <div className="flex items-center gap-2 flex-shrink-0">
-                <Badge label={l.status} variant={STATUS_COLOR[l.status] || 'gray'} className="capitalize" />
+              <div className="flex items-center gap-2 mt-2 pt-2 border-t border-gray-100">
                 <button onClick={() => handleEdit(l)}
-                  className="text-reads-muted hover:text-reads-navy transition-colors">
-                  <Edit2 size={15} />
+                  className="flex items-center gap-1 text-reads-muted hover:text-reads-navy text-xs font-semibold px-2 py-1 rounded-lg hover:bg-gray-100 transition-colors">
+                  <Edit2 size={12} /> Edit
                 </button>
                 {l.status === 'draft' && (
                   <button onClick={() => handlePublish(l.id)}
@@ -313,18 +329,22 @@ function LessonsSection() {
                     Publish
                   </button>
                 )}
-                {l.status === 'published' && !l.is_cooldown && (
-                  <button onClick={() => handleToggleCooldown(l.id, false)}
+                {l.status === 'published' && (
+                  <button onClick={() => handleToggleCooldown(l.id)}
                     className="text-amber-600 font-bold text-xs px-2 py-1 bg-amber-50 rounded-lg">
                     Cooldown
                   </button>
                 )}
-                {l.is_cooldown && (
-                  <button onClick={() => handleToggleCooldown(l.id, true)}
+                {l.status === 'cooldown' && (
+                  <button onClick={() => handleToggleCooldown(l.id)}
                     className="text-reads-green font-bold text-xs px-2 py-1 bg-reads-green-bg rounded-lg">
                     Go Live
                   </button>
                 )}
+                <button onClick={() => handleDeleteLesson(l.id)}
+                  className="ml-auto flex items-center gap-1 text-reads-red text-xs font-semibold px-2 py-1 rounded-lg hover:bg-red-50 transition-colors">
+                  <Trash2 size={12} /> Delete
+                </button>
               </div>
             </div>
           ))
@@ -335,7 +355,7 @@ function LessonsSection() {
       {editLesson && (
         <Modal title="Edit Lesson" onClose={() => setEditLesson(null)}>
           <div className="space-y-3">
-            {editLesson.is_cooldown && (
+            {editLesson.status === 'cooldown' && (
               <div className="bg-amber-50 border border-amber-200 rounded-xl px-3 py-2">
                 <p className="text-amber-700 text-xs font-semibold">⏱ Cooldown active — admin override enabled</p>
               </div>
