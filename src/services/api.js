@@ -379,6 +379,7 @@ export const profile = {
 export const admin = {
   // Dashboard stats
   getStats: () => get('/admin/stats'),
+  getRevenue: () => get('/admin/revenue'),
 
   // Users
   getUsers: (params = {}) => {

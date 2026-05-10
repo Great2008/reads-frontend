@@ -73,6 +73,10 @@ function BuyModal({ item, onClose, onBought }) {
   const [loading, setLoading] = useState(false);
   const [error, setError]     = useState('');
 
+  const buyerFee    = Math.round(item.price_tokens * 0.025);
+  const buyerTotal  = item.price_tokens + buyerFee;
+  const sellerGets  = item.price_tokens - Math.round(item.price_tokens * 0.025);
+
   const handle = async () => {
     setLoading(true); setError('');
     try {
@@ -95,15 +99,28 @@ function BuyModal({ item, onClose, onBought }) {
             </p>
           )}
         </div>
-        <div className="bg-reads-gold/10 border border-reads-gold/20 rounded-xl p-3 flex justify-between items-center">
-          <span className="text-reads-navy font-semibold text-sm">Total Cost</span>
-          <TokenBadge amount={item.price_tokens} size="lg" />
+
+        {/* Fee breakdown */}
+        <div className="bg-reads-gold/10 border border-reads-gold/20 rounded-xl p-3 space-y-2">
+          <div className="flex justify-between text-sm">
+            <span className="text-reads-muted">Item price</span>
+            <TokenBadge amount={item.price_tokens} />
+          </div>
+          <div className="flex justify-between text-sm">
+            <span className="text-reads-muted">Platform fee (2.5%)</span>
+            <span className="text-reads-red font-semibold">+{buyerFee} $READS</span>
+          </div>
+          <div className="border-t border-reads-gold/30 pt-2 flex justify-between">
+            <span className="text-reads-navy font-bold text-sm">You pay</span>
+            <TokenBadge amount={buyerTotal} size="lg" />
+          </div>
         </div>
+
         {error && <p className="text-reads-red text-sm">{error}</p>}
         <button onClick={handle} disabled={loading}
           className="reads-btn-gold w-full flex items-center justify-center gap-2">
           {loading && <Loader2 size={18} className="animate-spin" />}
-          Confirm Purchase
+          Confirm — Pay {buyerTotal} $READS
         </button>
       </div>
     </Modal>

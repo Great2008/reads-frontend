@@ -17,16 +17,27 @@ import {
 // ─────────────────────────────────────────────
 function AdminStats({ onNavigate }) {
   const [stats, setStats] = useState(null);
+  const [revenue, setRevenue] = useState(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    api.admin.getStats()
-      .then(setStats)
+    Promise.all([
+      api.admin.getStats(),
+      api.admin.getRevenue(),
+    ]).then(([s, r]) => { setStats(s); setRevenue(r); })
       .catch(() => {})
       .finally(() => setLoading(false));
   }, []);
 
   if (loading) return <LoadingOverlay />;
+
+  const BREAKDOWN_LABELS = {
+    marketplace_buyer:  'Marketplace (buyer)',
+    marketplace_seller: 'Marketplace (seller)',
+    p2p_transfer:       'P2P Transfers',
+    tutor:              'Tutor Sessions',
+    exam:               'Exam Registrations',
+  };
 
   return (
     <div className="px-4 pt-2 pb-4 space-y-5 animate-fade-in">
@@ -37,6 +48,27 @@ function AdminStats({ onNavigate }) {
         <StatCard icon={Building2} label="Active Partners" value={stats?.active_partners ?? 0} color="gold" onClick={() => onNavigate('partners')} />
         <StatCard icon={ClipboardList} label="Pending Applications" value={stats?.pending_applications ?? 0} color="red" onClick={() => onNavigate('applications')} />
       </div>
+
+      {/* Platform Revenue */}
+      <div className="reads-card p-4">
+        <div className="flex items-center justify-between mb-3">
+          <p className="font-black text-reads-navy text-sm">Platform Revenue</p>
+          <span className="text-reads-green font-black text-lg">{revenue?.total ?? 0} <span className="text-xs font-semibold">$READS</span></span>
+        </div>
+        {revenue?.breakdown && Object.keys(revenue.breakdown).length > 0 ? (
+          <div className="space-y-1.5">
+            {Object.entries(revenue.breakdown).map(([type, amount]) => (
+              <div key={type} className="flex justify-between items-center">
+                <span className="text-reads-muted text-xs">{BREAKDOWN_LABELS[type] || type}</span>
+                <span className="text-reads-navy text-xs font-bold">{amount} $READS</span>
+              </div>
+            ))}
+          </div>
+        ) : (
+          <p className="text-reads-muted text-xs">No revenue recorded yet.</p>
+        )}
+      </div>
+
       {stats?.pending_edit_requests > 0 && (
         <div className="bg-amber-50 border border-amber-200 rounded-2xl p-4 flex items-center gap-3">
           <AlertTriangle size={20} className="text-amber-500 flex-shrink-0" />
