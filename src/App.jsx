@@ -28,6 +28,7 @@ import MarketplaceModule    from './modules/marketplace/MarketplaceModule.jsx';
 import AITutorModule        from './modules/ai-tutor/AITutorModule.jsx';
 import AdminModule          from './modules/admin/AdminModule.jsx';
 import PartnerModule        from './modules/partner/PartnerModule.jsx';
+import CbtModule           from './modules/partner/CbtModule.jsx';
 
 // ─────────────────────────────────────────────
 // "More" tile grid
@@ -237,6 +238,10 @@ export default function App() {
 
   // ── Partner portal ──────────────────────────────────────────────────────────
   if (user.account_type === 'partner') {
+    // CBT centres get their own dedicated module; school partners get PartnerModule
+    if (user.partner_type === 'cbt_centre') {
+      return <CbtModule onLogout={handleLogout} />;
+    }
     return <PartnerModule onLogout={handleLogout} />;
   }
 
