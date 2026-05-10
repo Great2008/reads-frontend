@@ -12,6 +12,25 @@ const SUGGESTIONS = [
   'Explain ionic and covalent bonding',
 ];
 
+// ── Simple markdown renderer (covers Groq output) ────────────────────────────
+function renderMarkdown(text) {
+  let html = text
+    .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+    .replace(/```[\w]*\n?([\s\S]*?)```/g, '<pre class="bg-gray-100 rounded-lg p-3 my-2 text-xs overflow-x-auto whitespace-pre-wrap"><code>$1</code></pre>')
+    .replace(/`([^`]+)`/g, '<code class="bg-gray-100 px-1 rounded text-xs font-mono">$1</code>')
+    .replace(/\*\*(.+?)\*\*/g, '<strong class="font-bold">$1</strong>')
+    .replace(/\*(.+?)\*/g, '<em class="italic">$1</em>')
+    .replace(/^### (.+)$/gm, '<p class="font-bold text-reads-navy mt-3 mb-1 text-sm">$1</p>')
+    .replace(/^## (.+)$/gm, '<p class="font-bold text-reads-navy mt-3 mb-1">$1</p>')
+    .replace(/^# (.+)$/gm, '<p class="font-black text-reads-navy mt-3 mb-1">$1</p>')
+    .replace(/^\d+\.\s+(.+)$/gm, '<li class="ml-4 list-decimal">$1</li>')
+    .replace(/^[-•*]\s+(.+)$/gm, '<li class="ml-4 list-disc">$1</li>')
+    .replace(/(<li[^>]*>[\s\S]*?<\/li>)/g, '<ul class="my-1 space-y-0.5">$1</ul>')
+    .replace(/\n\n+/g, '<br/><br/>')
+    .replace(/\n/g, '<br/>');
+  return html;
+}
+
 // ── Message Bubble ────────────────────────────────────────────────────────────
 function MessageBubble({ msg }) {
   const isUser = msg.role === 'user';
@@ -33,7 +52,10 @@ function MessageBubble({ msg }) {
           ? 'bg-reads-navy text-white rounded-br-sm'
           : 'bg-white text-reads-navy shadow-reads-card rounded-bl-sm'
       }`}>
-        {msg.content}
+        {isUser
+          ? <span>{msg.content}</span>
+          : <div dangerouslySetInnerHTML={{ __html: renderMarkdown(msg.content) }} />
+        }
       </div>
     </div>
   );
