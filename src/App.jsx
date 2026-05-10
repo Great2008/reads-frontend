@@ -192,6 +192,31 @@ export default function App() {
     restore();
   }, []);
 
+  // Content protection — disable right-click, text selection, copy, screenshot keys
+  useEffect(() => {
+    const noContext  = (e) => e.preventDefault();
+    const noCopy     = (e) => { if (e.type === 'copy' || e.type === 'cut') e.preventDefault(); };
+    const noKeys     = (e) => {
+      // Block PrintScreen, Ctrl+P (print), Ctrl+S (save), Ctrl+U (source)
+      if (e.key === 'PrintScreen') e.preventDefault();
+      if (e.ctrlKey && ['p','s','u'].includes(e.key.toLowerCase())) e.preventDefault();
+    };
+    const noSelect   = () => { if (window.getSelection) window.getSelection().removeAllRanges(); };
+
+    document.addEventListener('contextmenu', noContext);
+    document.addEventListener('copy',        noCopy);
+    document.addEventListener('cut',         noCopy);
+    document.addEventListener('keydown',     noKeys);
+    document.addEventListener('keyup',       (e) => { if (e.key === 'PrintScreen') noSelect(); });
+
+    return () => {
+      document.removeEventListener('contextmenu', noContext);
+      document.removeEventListener('copy',        noCopy);
+      document.removeEventListener('cut',         noCopy);
+      document.removeEventListener('keydown',     noKeys);
+    };
+  }, []);
+
   // Refresh balance on wallet/dashboard view
   useEffect(() => {
     if (user && (view === 'dashboard' || view === 'wallet')) {

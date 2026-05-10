@@ -283,6 +283,13 @@ function LessonsSection() {
       token_reward: lesson.token_reward || 10,
       is_general: lesson.is_general || false,
       school_id: lesson.school_id || null,
+      quiz_pass_mark: lesson.quiz_pass_mark ?? 60,
+      quiz_perfect_bonus: lesson.quiz_perfect_bonus ?? 0,
+      quiz_time_limit_secs: lesson.quiz_time_limit_secs ?? null,
+      quiz_max_attempts: lesson.quiz_max_attempts ?? null,
+      quiz_questions_per_attempt: lesson.quiz_questions_per_attempt ?? null,
+      quiz_min_read_secs: lesson.quiz_min_read_secs ?? 30,
+      quiz_shuffle: lesson.quiz_shuffle ?? true,
     });
   };
 
@@ -426,6 +433,64 @@ function LessonsSection() {
                 onChange={(e) => setEditForm((f) => ({ ...f, is_general: e.target.checked, school_id: e.target.checked ? null : f.school_id }))} />
               <label htmlFor="is_general" className="reads-label mb-0">General lesson (visible to all students)</label>
             </div>
+
+            {/* ── Quiz Configuration ── */}
+            <div className="border-t border-gray-100 pt-4">
+              <p className="font-black text-reads-navy text-sm mb-3">Quiz Configuration</p>
+              <div className="space-y-3">
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="reads-label">Pass Mark (%)</label>
+                    <input className="reads-input" type="number" min="0" max="100"
+                      value={editForm.quiz_pass_mark ?? 60}
+                      onChange={(e) => setEditForm((f) => ({ ...f, quiz_pass_mark: parseInt(e.target.value) || 60 }))} />
+                  </div>
+                  <div>
+                    <label className="reads-label">Perfect Score Bonus</label>
+                    <input className="reads-input" type="number" min="0"
+                      value={editForm.quiz_perfect_bonus ?? 0}
+                      onChange={(e) => setEditForm((f) => ({ ...f, quiz_perfect_bonus: parseInt(e.target.value) || 0 }))} />
+                  </div>
+                </div>
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="reads-label">Time Limit (secs)</label>
+                    <input className="reads-input" type="number" min="0"
+                      placeholder="No limit"
+                      value={editForm.quiz_time_limit_secs ?? ''}
+                      onChange={(e) => setEditForm((f) => ({ ...f, quiz_time_limit_secs: e.target.value ? parseInt(e.target.value) : null }))} />
+                  </div>
+                  <div>
+                    <label className="reads-label">Max Attempts</label>
+                    <input className="reads-input" type="number" min="1"
+                      placeholder="Unlimited"
+                      value={editForm.quiz_max_attempts ?? ''}
+                      onChange={(e) => setEditForm((f) => ({ ...f, quiz_max_attempts: e.target.value ? parseInt(e.target.value) : null }))} />
+                  </div>
+                </div>
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="reads-label">Questions Per Attempt</label>
+                    <input className="reads-input" type="number" min="1"
+                      placeholder="All"
+                      value={editForm.quiz_questions_per_attempt ?? ''}
+                      onChange={(e) => setEditForm((f) => ({ ...f, quiz_questions_per_attempt: e.target.value ? parseInt(e.target.value) : null }))} />
+                  </div>
+                  <div>
+                    <label className="reads-label">Min Read Time (secs)</label>
+                    <input className="reads-input" type="number" min="0"
+                      value={editForm.quiz_min_read_secs ?? 30}
+                      onChange={(e) => setEditForm((f) => ({ ...f, quiz_min_read_secs: parseInt(e.target.value) || 30 }))} />
+                  </div>
+                </div>
+                <div className="flex items-center gap-2">
+                  <input type="checkbox" id="quiz_shuffle" checked={editForm.quiz_shuffle ?? true}
+                    onChange={(e) => setEditForm((f) => ({ ...f, quiz_shuffle: e.target.checked }))} />
+                  <label htmlFor="quiz_shuffle" className="reads-label mb-0">Shuffle questions & answers</label>
+                </div>
+              </div>
+            </div>
+
             <div>
               <label className="reads-label">Content</label>
               <textarea className="reads-input" rows={6} value={editForm.content}
