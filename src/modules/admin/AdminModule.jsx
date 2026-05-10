@@ -214,14 +214,16 @@ function LessonsSection() {
     setToast({ msg, type }); setTimeout(() => setToast(null), 3000);
   };
 
-  useEffect(() => {
-    api.admin.getLessons({ limit: 30 })
+  const loadLessons = () => {
+    api.admin.getLessons({ limit: 100 })
       .then((d) => setLessons(d?.lessons || []))
       .catch(() => {})
       .finally(() => setLoading(false));
-  }, []);
+  };
 
-  const handleToggleCooldown = async (id, isCooldown) => {
+  useEffect(() => { loadLessons(); }, []);
+
+  const handleToggleCooldown = async (id) => {
     try {
       const res = await api.admin.toggleCooldown(id);
       showToast(res.message);
@@ -256,8 +258,8 @@ function LessonsSection() {
   const handlePublish = async (id) => {
     try {
       await api.admin.publishLesson(id);
-      showToast('Lesson published! 3-hour cooldown started.');
-      setLessons((prev) => prev.map((l) => l.id === id ? { ...l, status: 'cooldown' } : l));
+      showToast('Lesson published!');
+      loadLessons();
     } catch (e) { showToast(e.message, 'error'); }
   };
 
