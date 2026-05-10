@@ -536,6 +536,13 @@ export const partner = {
   getCbtProfile: () => get('/partner/cbt/profile'),
   getCbtStats: () => get('/partner/cbt/stats'),
   updateCbtProfile: (data) => patch('/partner/cbt/profile', data),
+
+  // CBT Exam Windows
+  getCbtWindows: () => get('/partner/cbt/exams/windows'),
+  createCbtWindow: (data) => post('/partner/cbt/exams/windows', data),
+  updateCbtWindow: (id, data) => patch(`/partner/cbt/exams/windows/${id}`, data),
+  toggleCbtWindowStatus: (id) => patch(`/partner/cbt/exams/windows/${id}/status`, {}),
+  getCbtWindowRegistrations: (id) => get(`/partner/cbt/exams/windows/${id}/registrations`),
 };
 
 // ── Tutor Portal ──────────────────────────────────────────────────────────────

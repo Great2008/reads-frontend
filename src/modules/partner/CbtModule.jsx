@@ -2,7 +2,8 @@ import { useState, useEffect } from 'react';
 import {
   LayoutDashboard, Users, Wallet, Settings,
   ClipboardList, MapPin, Loader2, CheckCircle,
-  XCircle, LogOut, Edit2, Calendar, Eye
+  XCircle, LogOut, Edit2, Eye, Plus, Calendar,
+  Clock, ChevronRight, Trash2, ToggleLeft, ToggleRight
 } from 'lucide-react';
 import { api } from '../../services/api.js';
 
@@ -36,6 +37,8 @@ const StatCard = ({ icon: Icon, label, value, color }) => {
   );
 };
 
+const EXAM_TYPES = ['JAMB', 'WAEC', 'NECO', 'BECE', 'IELTS', 'SAT'];
+
 // ── Overview ──────────────────────────────────────────────────────────────────
 function CbtOverview({ profile, onNavigate }) {
   return (
@@ -46,42 +49,33 @@ function CbtOverview({ profile, onNavigate }) {
           <MapPin size={11} /> {profile?.address || 'Address not set'}
         </p>
       </div>
-
       <div className="grid grid-cols-2 gap-3">
-        <StatCard icon={Users}        label="Candidates"       value={profile?.total_candidates ?? 0} color="green" />
-        <StatCard icon={ClipboardList} label="Exams Scheduled" value={profile?.exams_scheduled ?? 0}  color="navy" />
-        <StatCard icon={Wallet}       label="Token Balance"    value="0"                               color="gold" />
-        <StatCard icon={Settings}     label="Status"           value={profile?.status ?? 'Active'}     color="red" />
+        <StatCard icon={Users}         label="Total Candidates"  value={profile?.total_candidates ?? 0}  color="green" />
+        <StatCard icon={ClipboardList} label="Exam Windows"      value={profile?.exams_scheduled ?? 0}   color="navy" />
+        <StatCard icon={MapPin}        label="State"             value={profile?.state || '—'}            color="gold" />
+        <StatCard icon={Settings}      label="Status"            value={profile?.status ?? 'Active'}      color="red" />
       </div>
-
       <div className="reads-card px-4 py-4">
-        <p className="font-bold text-reads-navy text-sm mb-1">Centre Details</p>
-        <div className="space-y-1.5 text-sm">
-          <div className="flex justify-between">
-            <span className="text-reads-muted">State</span>
-            <span className="font-semibold text-reads-navy">{profile?.state || '—'}</span>
-          </div>
-          <div className="flex justify-between">
-            <span className="text-reads-muted">LGA</span>
-            <span className="font-semibold text-reads-navy">{profile?.lga || '—'}</span>
-          </div>
-          <div className="flex justify-between">
-            <span className="text-reads-muted">Capacity</span>
-            <span className="font-semibold text-reads-navy">{profile?.capacity || '—'}</span>
-          </div>
+        <div className="flex items-center justify-between mb-3">
+          <p className="font-bold text-reads-navy text-sm">Centre Details</p>
+          <button onClick={() => onNavigate('profile')}
+            className="flex items-center gap-1 text-reads-green text-xs font-bold">
+            <Edit2 size={12} /> Edit
+          </button>
         </div>
-        <button onClick={() => onNavigate('profile')}
-          className="mt-3 flex items-center gap-1.5 text-reads-green text-xs font-bold">
-          <Edit2 size={13} /> Edit Profile
-        </button>
+        <div className="space-y-1.5 text-sm">
+          {[['State', profile?.state], ['LGA', profile?.lga], ['Capacity', profile?.capacity]].map(([k, v]) => (
+            <div key={k} className="flex justify-between">
+              <span className="text-reads-muted">{k}</span>
+              <span className="font-semibold text-reads-navy">{v || '—'}</span>
+            </div>
+          ))}
+        </div>
       </div>
-
-      <div className="reads-card px-4 py-4 border-l-4 border-amber-400 bg-amber-50">
-        <p className="font-bold text-amber-700 text-sm">Coming Soon</p>
-        <p className="text-amber-600 text-xs mt-1">
-          Candidate booking, exam scheduling, and results management are being built for Phase 2.
-        </p>
-      </div>
+      <button onClick={() => onNavigate('exams')}
+        className="reads-btn-primary w-full flex items-center justify-center gap-2">
+        <Calendar size={16} /> Manage Exam Windows
+      </button>
     </div>
   );
 }
@@ -89,10 +83,8 @@ function CbtOverview({ profile, onNavigate }) {
 // ── Profile Edit ──────────────────────────────────────────────────────────────
 function CbtProfileEdit({ profile, onSaved }) {
   const [form, setForm] = useState({
-    name: profile?.name || '',
-    address: profile?.address || '',
-    state: profile?.state || '',
-    lga: profile?.lga || '',
+    name: profile?.name || '', address: profile?.address || '',
+    state: profile?.state || '', lga: profile?.lga || '',
     capacity: profile?.capacity || '',
   });
   const [saving, setSaving] = useState(false);
@@ -105,9 +97,8 @@ function CbtProfileEdit({ profile, onSaved }) {
       await api.partner.updateCbtProfile({ ...form, capacity: form.capacity ? parseInt(form.capacity) : null });
       showToast('Profile updated');
       setTimeout(onSaved, 1000);
-    } catch (e) {
-      showToast(e.message || 'Failed to save', 'error');
-    } finally { setSaving(false); }
+    } catch (e) { showToast(e.message || 'Failed', 'error'); }
+    finally { setSaving(false); }
   };
 
   return (
@@ -116,7 +107,6 @@ function CbtProfileEdit({ profile, onSaved }) {
         <h2 className="font-black text-reads-navy text-lg">Edit Profile</h2>
         <p className="text-reads-muted text-xs">Update your CBT centre details</p>
       </div>
-
       {[
         { label: 'Centre Name', key: 'name', placeholder: 'e.g. Excellence CBT Centre' },
         { label: 'Address', key: 'address', placeholder: 'Full address' },
@@ -130,7 +120,6 @@ function CbtProfileEdit({ profile, onSaved }) {
             value={form[key]} onChange={e => setForm(f => ({ ...f, [key]: e.target.value }))} />
         </div>
       ))}
-
       <button onClick={handleSave} disabled={saving}
         className="reads-btn-primary w-full flex items-center justify-center gap-2">
         {saving && <Loader2 size={16} className="animate-spin" />}
@@ -141,77 +130,246 @@ function CbtProfileEdit({ profile, onSaved }) {
   );
 }
 
+// ── Create Exam Window Modal ───────────────────────────────────────────────────
+function CreateWindowModal({ onClose, onCreated }) {
+  const [form, setForm] = useState({
+    exam_type: 'JAMB', subject: '', exam_date: '',
+    duration_minutes: 180, total_slots: 100, fee_tokens: 500,
+  });
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState('');
+  const set = k => e => setForm(f => ({ ...f, [k]: e.target.value }));
 
-// ── CBT Exam Registrations ────────────────────────────────────────────────────
-function CbtExamsSection({ centreId }) {
-  const [registrations, setRegistrations] = useState([]);
-  const [loading, setLoading] = useState(true);
-  const [toast, setToast] = useState(null);
-  const showToast = (msg, type="success") => { setToast({msg,type}); setTimeout(()=>setToast(null),3500); };
-
-  useEffect(() => {
-    // CBT centres see registrations for their exam windows
-    api.admin.getExamRegistrations({ status: "proof_uploaded" })
-      .then(d => setRegistrations(d?.registrations || []))
-      .catch(() => {})
-      .finally(() => setLoading(false));
-  }, []);
-
-  if (loading) return (
-    <div className="flex justify-center py-14"><Loader2 size={24} className="animate-spin text-reads-green" /></div>
-  );
+  const handle = async () => {
+    if (!form.exam_date) return setError('Exam date is required.');
+    setLoading(true); setError('');
+    try {
+      await api.partner.createCbtWindow({
+        ...form,
+        duration_minutes: parseInt(form.duration_minutes),
+        total_slots: parseInt(form.total_slots),
+        fee_tokens: parseInt(form.fee_tokens),
+      });
+      onCreated();
+    } catch (e) { setError(e.message); }
+    finally { setLoading(false); }
+  };
 
   return (
-    <div className="px-4 pt-2 pb-4 animate-fade-in">
-      <div className="mb-4">
-        <h2 className="font-black text-reads-navy text-lg">Registrations</h2>
-        <p className="text-reads-muted text-xs">Students registered for your exams</p>
-      </div>
-      {registrations.length === 0 ? (
-        <div className="flex flex-col items-center py-14 text-center">
-          <div className="w-16 h-16 bg-gray-100 rounded-2xl flex items-center justify-center mb-4">
-            <ClipboardList size={28} className="text-gray-400" />
-          </div>
-          <p className="font-bold text-reads-navy text-sm">No pending proofs</p>
-          <p className="text-reads-muted text-xs mt-1">Students who upload payment proof will appear here.</p>
+    <div className="fixed inset-0 z-50 flex items-end justify-center p-4 pb-6">
+      <div className="absolute inset-0 bg-black/40" onClick={onClose} />
+      <div className="relative bg-white rounded-2xl shadow-2xl w-full max-w-sm max-h-[90vh] flex flex-col animate-slide-up">
+        <div className="flex items-center justify-between px-5 py-4 border-b border-gray-100">
+          <h3 className="font-black text-reads-navy text-base">New Exam Window</h3>
+          <button onClick={onClose}><XCircle size={20} className="text-reads-muted" /></button>
         </div>
+        <div className="p-5 overflow-y-auto space-y-3">
+          <div>
+            <label className="reads-label">Exam Type</label>
+            <select className="reads-input" value={form.exam_type} onChange={set('exam_type')}>
+              {EXAM_TYPES.map(t => <option key={t}>{t}</option>)}
+            </select>
+          </div>
+          <div>
+            <label className="reads-label">Subject (optional)</label>
+            <input className="reads-input" placeholder="e.g. Mathematics" value={form.subject} onChange={set('subject')} />
+          </div>
+          <div>
+            <label className="reads-label">Exam Date & Time</label>
+            <input className="reads-input" type="datetime-local" value={form.exam_date} onChange={set('exam_date')} />
+          </div>
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="reads-label">Duration (mins)</label>
+              <input className="reads-input" type="number" value={form.duration_minutes} onChange={set('duration_minutes')} />
+            </div>
+            <div>
+              <label className="reads-label">Total Slots</label>
+              <input className="reads-input" type="number" value={form.total_slots} onChange={set('total_slots')} />
+            </div>
+          </div>
+          <div>
+            <label className="reads-label">Fee (in $READS tokens)</label>
+            <input className="reads-input" type="number" value={form.fee_tokens} onChange={set('fee_tokens')} />
+          </div>
+          {error && <p className="text-reads-red text-sm">{error}</p>}
+          <button onClick={handle} disabled={loading}
+            className="reads-btn-primary w-full flex items-center justify-center gap-2">
+            {loading && <Loader2 size={16} className="animate-spin" />}
+            Create Window
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ── Exam Windows Section ──────────────────────────────────────────────────────
+function ExamWindowsSection() {
+  const [windows, setWindows] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [showCreate, setShowCreate] = useState(false);
+  const [selectedWindow, setSelectedWindow] = useState(null);
+  const [registrations, setRegistrations] = useState([]);
+  const [regLoading, setRegLoading] = useState(false);
+  const [toast, setToast] = useState(null);
+  const showToast = (msg, type = 'success') => { setToast({ msg, type }); setTimeout(() => setToast(null), 3000); };
+
+  const load = () => {
+    setLoading(true);
+    api.partner.getCbtWindows()
+      .then(d => setWindows(d?.windows || []))
+      .catch(() => {})
+      .finally(() => setLoading(false));
+  };
+
+  useEffect(() => { load(); }, []);
+
+  const handleToggle = async (id) => {
+    try {
+      const res = await api.partner.toggleCbtWindowStatus(id);
+      showToast(res.message);
+      load();
+    } catch (e) { showToast(e.message, 'error'); }
+  };
+
+  const handleViewRegs = async (w) => {
+    setSelectedWindow(w);
+    setRegLoading(true);
+    try {
+      const d = await api.partner.getCbtWindowRegistrations(w.id);
+      setRegistrations(d?.registrations || []);
+    } catch (_) {}
+    finally { setRegLoading(false); }
+  };
+
+  if (selectedWindow) return (
+    <div className="px-4 pt-2 pb-4 animate-fade-in">
+      <button onClick={() => setSelectedWindow(null)}
+        className="flex items-center gap-1 text-reads-muted text-sm mb-4">
+        ← Back to Windows
+      </button>
+      <h2 className="font-black text-reads-navy text-lg mb-1">{selectedWindow.exam_type} Registrations</h2>
+      <p className="text-reads-muted text-xs mb-4">
+        {new Date(selectedWindow.exam_date).toLocaleDateString('en-NG', { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' })}
+      </p>
+      {regLoading ? (
+        <div className="flex justify-center py-10"><Loader2 size={24} className="animate-spin text-reads-green" /></div>
+      ) : registrations.length === 0 ? (
+        <div className="text-center py-12 text-reads-muted text-sm">No registrations yet.</div>
       ) : (
         <div className="space-y-3">
           {registrations.map(r => (
-            <div key={r.id} className="reads-card px-4 py-3">
-              <div className="flex items-start justify-between gap-2 mb-2">
+            <div key={r.id} className="reads-card p-4">
+              <div className="flex justify-between items-start">
                 <div>
                   <p className="font-bold text-reads-navy text-sm">{r.student_name}</p>
-                  <p className="text-reads-muted text-xs">{r.exam_type} · Seat {r.seat_number}</p>
-                  <p className="text-reads-muted text-xs">{r.exam_date ? new Date(r.exam_date).toLocaleDateString() : ""}</p>
+                  <p className="text-reads-muted text-xs">{r.student_email}</p>
+                  <p className="text-reads-muted text-xs mt-0.5">Seat: {r.seat_number || 'Unassigned'}</p>
                 </div>
-                <span className="text-[10px] bg-amber-50 text-amber-600 font-bold px-2 py-1 rounded-full">Proof Uploaded</span>
+                <span className={`text-[10px] font-bold px-2 py-1 rounded-full ${
+                  r.status === 'confirmed' ? 'bg-green-100 text-reads-green'
+                  : r.status === 'proof_uploaded' ? 'bg-amber-50 text-amber-600'
+                  : 'bg-gray-100 text-reads-muted'
+                }`}>{r.status?.replace('_', ' ').toUpperCase()}</span>
               </div>
               {r.proof_url && (
                 <a href={r.proof_url} target="_blank" rel="noopener noreferrer"
-                  className="text-xs text-reads-green font-bold flex items-center gap-1 mb-2">
-                  <Eye size={12} /> View Proof
+                  className="mt-2 flex items-center gap-1 text-reads-green text-xs font-bold">
+                  <Eye size={12} /> View Payment Proof
                 </a>
               )}
-              <p className="text-reads-muted text-xs">Contact admin to verify and confirm this registration.</p>
             </div>
           ))}
         </div>
       )}
-      {toast && <Toast msg={toast.msg} type={toast.type} onClose={() => setToast(null)} />}
+    </div>
+  );
+
+  return (
+    <div className="px-4 pt-2 pb-4 animate-fade-in">
+      <div className="flex items-center justify-between mb-4">
+        <div>
+          <h2 className="font-black text-reads-navy text-lg">Exam Windows</h2>
+          <p className="text-reads-muted text-xs">{windows.length} total</p>
+        </div>
+        <button onClick={() => setShowCreate(true)}
+          className="flex items-center gap-1.5 bg-reads-green text-white text-sm font-bold px-3 py-2 rounded-xl">
+          <Plus size={15} /> New
+        </button>
+      </div>
+
+      {loading ? (
+        <div className="flex justify-center py-14"><Loader2 size={24} className="animate-spin text-reads-green" /></div>
+      ) : windows.length === 0 ? (
+        <div className="text-center py-14">
+          <Calendar size={40} className="text-gray-300 mx-auto mb-3" />
+          <p className="font-bold text-reads-navy text-sm">No exam windows yet</p>
+          <p className="text-reads-muted text-xs mt-1">Create your first exam window for students to register.</p>
+          <button onClick={() => setShowCreate(true)} className="reads-btn-primary mt-4 px-6">Create Window</button>
+        </div>
+      ) : (
+        <div className="space-y-3">
+          {windows.map(w => (
+            <div key={w.id} className="reads-card p-4">
+              <div className="flex items-start justify-between mb-2">
+                <div>
+                  <p className="font-bold text-reads-navy text-sm">{w.exam_type}{w.subject ? ` — ${w.subject}` : ''}</p>
+                  <p className="text-reads-muted text-xs flex items-center gap-1 mt-0.5">
+                    <Calendar size={11} />
+                    {new Date(w.exam_date).toLocaleDateString('en-NG', { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' })}
+                  </p>
+                  <p className="text-reads-muted text-xs flex items-center gap-1">
+                    <Clock size={11} /> {w.duration_minutes} mins · {w.fee_tokens} $READS
+                  </p>
+                </div>
+                <span className={`text-[10px] font-bold px-2 py-1 rounded-full ${
+                  w.status === 'open' ? 'bg-green-100 text-reads-green' : 'bg-gray-100 text-reads-muted'
+                }`}>{w.status?.toUpperCase()}</span>
+              </div>
+              <div className="flex items-center justify-between pt-2 border-t border-gray-100">
+                <span className="text-reads-muted text-xs">
+                  {w.available_slots}/{w.total_slots} slots available
+                </span>
+                <div className="flex items-center gap-2">
+                  <button onClick={() => handleViewRegs(w)}
+                    className="flex items-center gap-1 text-reads-navy text-xs font-bold px-2 py-1 rounded-lg bg-gray-100">
+                    <Users size={12} /> Registrations
+                  </button>
+                  <button onClick={() => handleToggle(w.id)}
+                    className={`flex items-center gap-1 text-xs font-bold px-2 py-1 rounded-lg ${
+                      w.status === 'open' ? 'bg-red-50 text-reads-red' : 'bg-green-50 text-reads-green'
+                    }`}>
+                    {w.status === 'open' ? <ToggleRight size={12} /> : <ToggleLeft size={12} />}
+                    {w.status === 'open' ? 'Close' : 'Open'}
+                  </button>
+                </div>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {showCreate && (
+        <CreateWindowModal
+          onClose={() => setShowCreate(false)}
+          onCreated={() => { setShowCreate(false); load(); showToast('Exam window created!'); }}
+        />
+      )}
+      {toast && <Toast msg={toast.msg} type={toast.type} />}
     </div>
   );
 }
 
 // ── Nav ───────────────────────────────────────────────────────────────────────
 const NAV_ITEMS = [
-  { key: 'overview',      label: 'Overview',  icon: LayoutDashboard },
-  { key: 'registrations', label: 'Students',  icon: ClipboardList },
-  { key: 'wallet',        label: 'Wallet',    icon: Wallet },
+  { key: 'overview', label: 'Overview', icon: LayoutDashboard },
+  { key: 'exams',    label: 'Exams',    icon: Calendar },
+  { key: 'wallet',   label: 'Wallet',   icon: Wallet },
 ];
 
 // ── Main ──────────────────────────────────────────────────────────────────────
-export default function CbtModule({ user, onLogout }) {
+export default function CbtModule({ onLogout }) {
   const [section, setSection] = useState('overview');
   const [profile, setProfile] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -253,14 +411,10 @@ export default function CbtModule({ user, onLogout }) {
 
       {/* Content */}
       <main className="max-w-lg mx-auto pt-16 pb-24">
-        {section === 'overview' && (
-          <CbtOverview profile={profile} onNavigate={setSection} />
-        )}
-        {section === 'profile' && (
-          <CbtProfileEdit profile={profile} onSaved={() => setSection('overview')} />
-        )}
-        {section === 'registrations' && <CbtExamsSection />}
-        {section === 'wallet' && (
+        {section === 'overview' && <CbtOverview profile={profile} onNavigate={setSection} />}
+        {section === 'profile'  && <CbtProfileEdit profile={profile} onSaved={() => { setSection('overview'); }} />}
+        {section === 'exams'    && <ExamWindowsSection />}
+        {section === 'wallet'   && (
           <div className="px-4 pt-4">
             <p className="font-black text-reads-navy text-lg mb-2">Wallet</p>
             <p className="text-reads-muted text-sm">Token wallet coming in Phase 2.</p>
