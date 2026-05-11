@@ -1,7 +1,8 @@
 import { useState, useEffect, useRef } from 'react';
 import {
   GraduationCap, Star, Clock, Calendar, MessageSquare,
-  ChevronRight, Search, Loader2, ArrowLeft, Coins, CheckCircle
+  ChevronRight, Search, Loader2, ArrowLeft, Coins,
+  CheckCircle, XCircle, MessageCircle, AlertTriangle
 } from 'lucide-react';
 import { api } from '../../services/api.js';
 import { LoadingOverlay, EmptyState, Badge, Modal, Toast, TokenBadge } from '../../components/UI.jsx';
