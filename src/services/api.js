@@ -553,6 +553,8 @@ export const tutorPortal = {
   confirmSession: (session_id) => post(`/tutor/sessions/${session_id}/confirm`, {}),
   cancelSession: (session_id, reason) =>
     post(`/tutor/sessions/${session_id}/cancel`, { reason }),
+  completeSession: (session_id) =>
+    post(`/tutor/sessions/${session_id}/complete`, {}),
   setAvailability: (data) => post('/tutor/availability', data),
   getEarnings: () => get('/tutor/earnings'),
 };

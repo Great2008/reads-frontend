@@ -29,6 +29,7 @@ import AITutorModule        from './modules/ai-tutor/AITutorModule.jsx';
 import AdminModule          from './modules/admin/AdminModule.jsx';
 import PartnerModule        from './modules/partner/PartnerModule.jsx';
 import CbtModule           from './modules/partner/CbtModule.jsx';
+import TutorPortalModule   from './modules/tutors/TutorPortalModule.jsx';
 
 // ─────────────────────────────────────────────
 // "More" tile grid
@@ -241,6 +242,9 @@ export default function App() {
     // CBT centres get their own dedicated module; school partners get PartnerModule
     if (user.partner_type === 'cbt_centre') {
       return <CbtModule onLogout={handleLogout} />;
+    }
+    if (user.partner_type === 'tutor') {
+      return <TutorPortalModule onLogout={handleLogout} />;
     }
     return <PartnerModule onLogout={handleLogout} />;
   }
