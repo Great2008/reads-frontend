@@ -259,6 +259,7 @@ function StudentChatModal({ session, onClose }) {
 
   return (
     <div className="fixed inset-0 z-50 flex flex-col bg-white">
+      {/* Header */}
       <div className="flex items-center gap-3 px-4 py-3 border-b border-gray-100 bg-white flex-shrink-0">
         <button onClick={onClose} className="p-1.5 rounded-xl bg-gray-100">
           <XCircle size={18} className="text-reads-muted" />
@@ -268,7 +269,8 @@ function StudentChatModal({ session, onClose }) {
           <p className="text-reads-muted text-xs">{session.subject}</p>
         </div>
       </div>
-      <div className="flex-1 overflow-y-auto px-4 py-4 space-y-3">
+      {/* Messages — pb-24 clears the fixed input bar */}
+      <div className="flex-1 overflow-y-auto px-4 py-4 pb-24 space-y-3">
         {messages.length === 0 && (
           <p className="text-center text-reads-muted text-sm pt-8">No messages yet. Say hello!</p>
         )}
@@ -286,12 +288,14 @@ function StudentChatModal({ session, onClose }) {
         ))}
         <div ref={bottomRef} />
       </div>
-      <div className="px-4 py-3 border-t border-gray-100 flex gap-2 flex-shrink-0 bg-white">
+      {/* Input — fixed above bottom nav (z-60 beats nav z-50) */}
+      <div className="fixed bottom-0 left-0 right-0 z-60 px-4 py-3 border-t border-gray-100 flex gap-2 bg-white"
+           style={{ paddingBottom: 'calc(env(safe-area-inset-bottom) + 12px)' }}>
         <input className="flex-1 reads-input" placeholder="Type a message…"
           value={text} onChange={e => setText(e.target.value)}
           onKeyDown={e => e.key === 'Enter' && !e.shiftKey && send()} />
         <button onClick={send} disabled={sending || !text.trim()}
-          className="bg-reads-green text-white px-4 py-2 rounded-xl font-bold text-sm disabled:opacity-50">
+          className="bg-reads-green text-white px-4 py-2 rounded-xl font-bold text-sm disabled:opacity-50 flex items-center">
           {sending ? <Loader2 size={16} className="animate-spin" /> : 'Send'}
         </button>
       </div>

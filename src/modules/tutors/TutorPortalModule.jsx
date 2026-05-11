@@ -110,7 +110,8 @@ function SessionChatModal({ session, onClose, isTutor = false }) {
       </div>
 
       {/* Messages */}
-      <div className="flex-1 overflow-y-auto px-4 py-4 space-y-3">
+      {/* Messages — pb-24 clears the fixed input bar */}
+      <div className="flex-1 overflow-y-auto px-4 py-4 pb-24 space-y-3">
         {messages.length === 0 && (
           <p className="text-center text-reads-muted text-sm pt-8">No messages yet. Say hello!</p>
         )}
@@ -131,8 +132,9 @@ function SessionChatModal({ session, onClose, isTutor = false }) {
         <div ref={bottomRef} />
       </div>
 
-      {/* Input */}
-      <div className="px-4 py-3 border-t border-gray-100 flex gap-2 flex-shrink-0 bg-white">
+      {/* Input — fixed above bottom nav */}
+      <div className="fixed bottom-0 left-0 right-0 z-60 px-4 py-3 border-t border-gray-100 flex gap-2 bg-white"
+           style={{ paddingBottom: 'calc(env(safe-area-inset-bottom) + 12px)' }}>
         <input
           className="flex-1 reads-input"
           placeholder="Type a message…"
@@ -141,7 +143,7 @@ function SessionChatModal({ session, onClose, isTutor = false }) {
           onKeyDown={e => e.key === 'Enter' && !e.shiftKey && send()}
         />
         <button onClick={send} disabled={sending || !text.trim()}
-          className="bg-reads-green text-white px-4 py-2 rounded-xl font-bold text-sm disabled:opacity-50">
+          className="bg-reads-green text-white px-4 py-2 rounded-xl font-bold text-sm disabled:opacity-50 flex items-center">
           {sending ? <Loader2 size={16} className="animate-spin" /> : 'Send'}
         </button>
       </div>
