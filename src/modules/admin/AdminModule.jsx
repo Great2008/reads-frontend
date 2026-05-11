@@ -825,6 +825,151 @@ function SchoolCurriculumSection() {
 // ─────────────────────────────────────────────
 // Exam Management Section
 // ─────────────────────────────────────────────
+
+// ── Disputes Section ──────────────────────────────────────────────────────────
+function DisputesSection() {
+  const [disputes, setDisputes]   = useState([]);
+  const [loading, setLoading]     = useState(true);
+  const [expanded, setExpanded]   = useState(null);
+  const [reviewing, setReviewing] = useState(null);
+  const [note, setNote]           = useState('');
+  const [toast, setToast]         = useState(null);
+  const showToast = (msg, type = 'success') => { setToast({ msg, type }); setTimeout(() => setToast(null), 3000); };
+
+  const load = () => {
+    setLoading(true);
+    api.admin.getDisputes()
+      .then(d => setDisputes(d?.disputes || []))
+      .catch(() => {})
+      .finally(() => setLoading(false));
+  };
+
+  useEffect(() => { load(); }, []);
+
+  const handleReview = async (id, decision) => {
+    try {
+      const res = await api.admin.reviewDispute(id, { decision, admin_note: note });
+      showToast(res.message);
+      setReviewing(null);
+      setNote('');
+      load();
+    } catch (e) { showToast(e.message, 'error'); }
+  };
+
+  const STATUS_STYLE = {
+    pending:  { bg: 'bg-amber-50',  text: 'text-amber-600',  label: 'Pending'  },
+    approved: { bg: 'bg-green-100', text: 'text-reads-green',label: 'Approved' },
+    rejected: { bg: 'bg-gray-100',  text: 'text-gray-500',   label: 'Rejected' },
+  };
+
+  if (loading) return <LoadingOverlay message="Loading disputes…" />;
+
+  return (
+    <div className="space-y-3">
+      <SectionHeader title="Session Disputes" subtitle={`${disputes.filter(d => d.status === 'pending').length} pending review`} />
+
+      {disputes.length === 0 ? (
+        <EmptyState icon={AlertTriangle} title="No disputes" description="All sessions are running smoothly." />
+      ) : disputes.map(d => {
+        const st = STATUS_STYLE[d.status] || STATUS_STYLE.pending;
+        const isExpanded = expanded === d.id;
+        return (
+          <div key={d.id} className="reads-card p-4">
+            {/* Header */}
+            <div className="flex items-start justify-between mb-2">
+              <div>
+                <p className="font-bold text-reads-navy text-sm">{d.subject}</p>
+                <p className="text-reads-muted text-xs">{d.student_name} vs {d.tutor_name}</p>
+                <p className="text-reads-muted text-xs mt-0.5">
+                  {new Date(d.created_at).toLocaleDateString('en-NG', { day: 'numeric', month: 'short', year: 'numeric' })}
+                </p>
+              </div>
+              <span className={`text-[10px] font-bold px-2 py-1 rounded-full ${st.bg} ${st.text}`}>
+                {st.label}
+              </span>
+            </div>
+
+            {/* Reason */}
+            <div className="bg-red-50 rounded-xl p-3 mb-3">
+              <p className="text-reads-red text-xs font-semibold mb-1">Student's Reason:</p>
+              <p className="text-reads-navy text-xs">{d.reason}</p>
+            </div>
+
+            {/* Cost */}
+            <p className="text-reads-muted text-xs mb-2">
+              Session value: <span className="font-bold text-reads-gold">{d.cost_tokens} $READS</span>
+            </p>
+
+            {/* Chat history toggle */}
+            <button onClick={() => setExpanded(isExpanded ? null : d.id)}
+              className="text-reads-green text-xs font-bold mb-3 flex items-center gap-1">
+              {isExpanded ? '▲' : '▼'} {d.chat_history?.length || 0} chat messages
+            </button>
+
+            {isExpanded && d.chat_history?.length > 0 && (
+              <div className="bg-gray-50 rounded-xl p-3 mb-3 max-h-48 overflow-y-auto space-y-2">
+                {d.chat_history.map((m, i) => (
+                  <div key={i} className="text-xs">
+                    <span className="font-bold text-reads-navy">{m.sender}: </span>
+                    <span className="text-reads-muted">{m.content}</span>
+                    <span className="text-gray-400 ml-1">
+                      {new Date(m.created_at).toLocaleTimeString('en-NG', { hour: '2-digit', minute: '2-digit' })}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            )}
+
+            {isExpanded && (!d.chat_history || d.chat_history.length === 0) && (
+              <div className="bg-gray-50 rounded-xl p-3 mb-3">
+                <p className="text-reads-muted text-xs text-center">No chat messages in this session.</p>
+              </div>
+            )}
+
+            {/* Admin note if already reviewed */}
+            {d.admin_note && (
+              <div className="bg-blue-50 rounded-xl p-3 mb-3">
+                <p className="text-reads-navy text-xs font-semibold mb-1">Admin Note:</p>
+                <p className="text-reads-muted text-xs">{d.admin_note}</p>
+              </div>
+            )}
+
+            {/* Review actions */}
+            {d.status === 'pending' && (
+              reviewing === d.id ? (
+                <div className="space-y-3 border-t border-gray-100 pt-3">
+                  <textarea className="reads-input resize-none" rows={2}
+                    placeholder="Optional admin note…"
+                    value={note} onChange={e => setNote(e.target.value)} />
+                  <div className="flex gap-2">
+                    <button onClick={() => handleReview(d.id, 'approve')}
+                      className="flex-1 reads-btn-primary text-sm py-2 flex items-center justify-center gap-1">
+                      <CheckCircle size={14} /> Pay Tutor
+                    </button>
+                    <button onClick={() => handleReview(d.id, 'reject')}
+                      className="flex-1 text-white text-sm font-bold py-2 rounded-xl bg-reads-red flex items-center justify-center gap-1">
+                      <XCircle size={14} /> Refund Student
+                    </button>
+                  </div>
+                  <button onClick={() => { setReviewing(null); setNote(''); }}
+                    className="w-full text-reads-muted text-xs text-center">Cancel</button>
+                </div>
+              ) : (
+                <button onClick={() => setReviewing(d.id)}
+                  className="w-full reads-btn-primary text-sm py-2">
+                  Review Dispute
+                </button>
+              )
+            )}
+          </div>
+        );
+      })}
+
+      {toast && <Toast message={toast.msg} type={toast.type} onClose={() => setToast(null)} />}
+    </div>
+  );
+}
+
 function ExamSection() {
   const [tab, setTab] = useState("windows");
   const [windows, setWindows] = useState([]);
@@ -1556,6 +1701,7 @@ const ADMIN_NAV = [
   { key: 'tournament',   label: 'Challenge',    icon: Trophy },
   { key: 'exams',        label: 'Exams',        icon: ClipboardList },
   { key: 'quiz',         label: 'Quiz',         icon: HelpCircle },
+  { key: 'disputes',     label: 'Disputes',     icon: AlertTriangle },
   { key: 'curriculum',  label: 'Curriculum',  icon: FileText },
   { key: 'audit-log',   label: 'Audit Log',   icon: ClipboardList },
   { key: 'notifications', label: 'Notify',       icon: Bell },
@@ -1603,6 +1749,7 @@ export default function AdminModule({ currentUserId }) {
       {section === 'tournament'    && <TournamentSection />}
       {section === 'exams'         && <ExamSection />}
       {section === 'quiz'          && <QuizSection />}
+      {section === 'disputes'      && <DisputesSection />}
       {section === 'curriculum'    && <SchoolCurriculumSection />}
     </div>
   );

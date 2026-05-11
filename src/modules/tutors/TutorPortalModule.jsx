@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import {
   LayoutDashboard, Calendar, Wallet, Settings,
   Loader2, CheckCircle, XCircle, LogOut,
@@ -46,6 +46,107 @@ const STATUS_STYLE = {
 
 function fmtDate(iso) {
   return new Date(iso).toLocaleDateString('en-NG', { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' });
+}
+
+
+// ── Session Chat Modal ────────────────────────────────────────────────────────
+function SessionChatModal({ session, onClose, isTutor = false }) {
+  const [messages, setMessages]   = useState([]);
+  const [text, setText]           = useState('');
+  const [sending, setSending]     = useState(false);
+  const [lastSince, setLastSince] = useState(null);
+  const bottomRef                 = useRef(null);
+
+  const load = async (since = null) => {
+    try {
+      const api_obj = isTutor ? api.tutorPortal : api.tutors;
+      const d = await api_obj.getMessages(session.id, since);
+      if (since) {
+        setMessages(prev => [...prev, ...(d.messages || [])]);
+      } else {
+        setMessages(d.messages || []);
+      }
+      if (d.messages?.length) {
+        setLastSince(d.messages[d.messages.length - 1].created_at);
+      }
+    } catch (_) {}
+  };
+
+  useEffect(() => {
+    load();
+    const interval = setInterval(() => load(lastSince), 5000);
+    return () => clearInterval(interval);
+  }, [session.id]);
+
+  useEffect(() => {
+    bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
+  }, [messages]);
+
+  const send = async () => {
+    if (!text.trim()) return;
+    setSending(true);
+    try {
+      const api_obj = isTutor ? api.tutorPortal : api.tutors;
+      const msg = await api_obj.sendMessage(session.id, text.trim());
+      setMessages(prev => [...prev, msg]);
+      setText('');
+    } catch (_) {}
+    finally { setSending(false); }
+  };
+
+  return (
+    <div className="fixed inset-0 z-50 flex flex-col bg-white">
+      {/* Header */}
+      <div className="flex items-center gap-3 px-4 py-3 border-b border-gray-100 bg-white flex-shrink-0">
+        <button onClick={onClose} className="p-1.5 rounded-xl bg-gray-100">
+          <XCircle size={18} className="text-reads-muted" />
+        </button>
+        <div>
+          <p className="font-black text-reads-navy text-sm">
+            {isTutor ? session.student_name : session.tutor_name}
+          </p>
+          <p className="text-reads-muted text-xs">{session.subject}</p>
+        </div>
+      </div>
+
+      {/* Messages */}
+      <div className="flex-1 overflow-y-auto px-4 py-4 space-y-3">
+        {messages.length === 0 && (
+          <p className="text-center text-reads-muted text-sm pt-8">No messages yet. Say hello!</p>
+        )}
+        {messages.map(m => (
+          <div key={m.id} className={`flex ${m.is_mine ? 'justify-end' : 'justify-start'}`}>
+            <div className={`max-w-[78%] px-4 py-2.5 rounded-2xl text-sm leading-relaxed ${
+              m.is_mine
+                ? 'bg-reads-green text-white rounded-br-sm'
+                : 'bg-gray-100 text-reads-navy rounded-bl-sm'
+            }`}>
+              <p>{m.content}</p>
+              <p className={`text-[10px] mt-1 ${m.is_mine ? 'text-white/60' : 'text-reads-muted'}`}>
+                {new Date(m.created_at).toLocaleTimeString('en-NG', { hour: '2-digit', minute: '2-digit' })}
+              </p>
+            </div>
+          </div>
+        ))}
+        <div ref={bottomRef} />
+      </div>
+
+      {/* Input */}
+      <div className="px-4 py-3 border-t border-gray-100 flex gap-2 flex-shrink-0 bg-white">
+        <input
+          className="flex-1 reads-input"
+          placeholder="Type a message…"
+          value={text}
+          onChange={e => setText(e.target.value)}
+          onKeyDown={e => e.key === 'Enter' && !e.shiftKey && send()}
+        />
+        <button onClick={send} disabled={sending || !text.trim()}
+          className="bg-reads-green text-white px-4 py-2 rounded-xl font-bold text-sm disabled:opacity-50">
+          {sending ? <Loader2 size={16} className="animate-spin" /> : 'Send'}
+        </button>
+      </div>
+    </div>
+  );
 }
 
 // ── Overview ──────────────────────────────────────────────────────────────────
@@ -139,6 +240,8 @@ function TutorSessions() {
     } catch (e) { showToast(e.message || 'Failed', 'error'); }
   };
 
+  const [chatSession, setChatSession] = useState(null);
+
   const FILTERS = ['all', 'pending', 'confirmed', 'completed', 'cancelled'];
   const filtered = sessions.filter(s => filter === 'all' || s.status === filter);
 
@@ -194,10 +297,25 @@ function TutorSessions() {
                       </>
                     )}
                     {s.status === 'confirmed' && (
-                      <button onClick={() => handleAction(s.id, 'complete')}
-                        className="text-white text-xs font-bold px-3 py-1.5 bg-reads-green rounded-lg">
-                        Mark Complete
-                      </button>
+                      <>
+                        <button onClick={() => setChatSession(s)}
+                          className="text-reads-navy text-xs font-bold px-3 py-1.5 bg-gray-100 rounded-lg">
+                          Chat
+                        </button>
+                        <button onClick={() => handleAction(s.id, 'complete')}
+                          className="text-white text-xs font-bold px-3 py-1.5 bg-reads-green rounded-lg">
+                          Mark Complete
+                        </button>
+                      </>
+                    )}
+                    {s.status === 'completing' && (
+                      <>
+                        <button onClick={() => setChatSession(s)}
+                          className="text-reads-navy text-xs font-bold px-3 py-1.5 bg-gray-100 rounded-lg">
+                          Chat
+                        </button>
+                        <span className="text-amber-600 text-xs font-semibold">Awaiting student...</span>
+                      </>
                     )}
                   </div>
                 </div>
@@ -207,6 +325,7 @@ function TutorSessions() {
           })}
         </div>
       )}
+      {chatSession && <SessionChatModal session={chatSession} onClose={() => setChatSession(null)} isTutor={true} />}
       {toast && <Toast msg={toast.msg} type={toast.type} />}
     </div>
   );

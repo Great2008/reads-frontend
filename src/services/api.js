@@ -298,8 +298,11 @@ export const tutors = {
   book: (tutor_id, data) => post(`/tutors/${tutor_id}/book`, data),
   getSessions: () => get('/tutors/sessions'),
   confirmSession: (session_id) => post(`/tutors/sessions/${session_id}/confirm`, {}),
-  cancelSession: (session_id, reason) =>
-    post(`/tutors/sessions/${session_id}/cancel`, { reason }),
+  disputeSession: (session_id, reason) => post(`/tutors/sessions/${session_id}/dispute`, { reason }),
+  cancelSession: (session_id, reason) => post(`/tutors/sessions/${session_id}/cancel`, { reason }),
+  getMessages: (session_id, since = null) => get(`/tutors/sessions/${session_id}/messages${since ? `?since=${encodeURIComponent(since)}` : ''}`),
+  sendMessage: (session_id, content) => post(`/tutors/sessions/${session_id}/messages`, { reason: content }),
+  rateSession: (session_id, stars, comment) => post(`/tutors/sessions/${session_id}/rate`, { stars, comment }),
 };
 
 // ── Wallet ────────────────────────────────────────────────────────────────────
@@ -380,6 +383,8 @@ export const admin = {
   // Dashboard stats
   getStats: () => get('/admin/stats'),
   getRevenue: () => get('/admin/revenue'),
+  getDisputes: () => get('/admin/disputes'),
+  reviewDispute: (dispute_id, data) => post(`/admin/disputes/${dispute_id}/review`, data),
 
   // Users
   getUsers: (params = {}) => {
@@ -555,8 +560,12 @@ export const tutorPortal = {
     post(`/tutor/sessions/${session_id}/cancel`, { reason }),
   completeSession: (session_id) =>
     post(`/tutor/sessions/${session_id}/complete`, {}),
+  confirmSession: (session_id) =>
+    post(`/tutor/sessions/${session_id}/confirm`, {}),
   setAvailability: (data) => post('/tutor/availability', data),
   getEarnings: () => get('/tutor/earnings'),
+  getMessages: (session_id, since = null) => get(`/tutor/sessions/${session_id}/messages${since ? `?since=${since}` : ''}`),
+  sendMessage: (session_id, content) => post(`/tutor/sessions/${session_id}/messages`, { content }),
 };
 const upload = async (path, formData) => {
   const token = localStorage.getItem('reads_token') || localStorage.getItem('access_token');
