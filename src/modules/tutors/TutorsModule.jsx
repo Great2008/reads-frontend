@@ -258,29 +258,34 @@ function StudentChatModal({ session, onClose }) {
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex flex-col bg-white">
+    <div style={{ position: 'fixed', inset: 0, zIndex: 9999, display: 'flex', flexDirection: 'column', background: 'white' }}>
       {/* Header */}
-      <div className="flex items-center gap-3 px-4 py-3 border-b border-gray-100 bg-white flex-shrink-0">
-        <button onClick={onClose} className="p-1.5 rounded-xl bg-gray-100">
+      <div style={{ flexShrink: 0, borderBottom: '1px solid #f3f4f6', padding: '12px 16px', display: 'flex', alignItems: 'center', gap: 12 }}>
+        <button onClick={onClose} style={{ padding: 6, borderRadius: 10, background: '#f3f4f6', border: 'none', cursor: 'pointer' }}>
           <XCircle size={18} className="text-reads-muted" />
         </button>
         <div>
-          <p className="font-black text-reads-navy text-sm">{session.tutor_name}</p>
-          <p className="text-reads-muted text-xs">{session.subject}</p>
+          <p style={{ fontWeight: 900, color: '#0D1F3C', fontSize: 14, margin: 0 }}>{session.tutor_name}</p>
+          <p style={{ color: '#9CA3AF', fontSize: 12, margin: 0 }}>{session.subject}</p>
         </div>
       </div>
-      {/* Messages — pb-24 clears the fixed input bar */}
-      <div className="flex-1 overflow-y-auto px-4 py-4 pb-24 space-y-3">
+      {/* Messages */}
+      <div style={{ flex: 1, overflowY: 'auto', padding: '16px', display: 'flex', flexDirection: 'column', gap: 12 }}>
         {messages.length === 0 && (
-          <p className="text-center text-reads-muted text-sm pt-8">No messages yet. Say hello!</p>
+          <p style={{ textAlign: 'center', color: '#9CA3AF', fontSize: 14, paddingTop: 32 }}>No messages yet. Say hello!</p>
         )}
         {messages.map(m => (
-          <div key={m.id} className={`flex ${m.is_mine ? 'justify-end' : 'justify-start'}`}>
-            <div className={`max-w-[78%] px-4 py-2.5 rounded-2xl text-sm ${
-              m.is_mine ? 'bg-reads-green text-white rounded-br-sm' : 'bg-gray-100 text-reads-navy rounded-bl-sm'
-            }`}>
-              <p>{m.content}</p>
-              <p className={`text-[10px] mt-1 ${m.is_mine ? 'text-white/60' : 'text-reads-muted'}`}>
+          <div key={m.id} style={{ display: 'flex', justifyContent: m.is_mine ? 'flex-end' : 'flex-start' }}>
+            <div style={{
+              maxWidth: '78%', padding: '10px 14px', borderRadius: 18,
+              fontSize: 14, lineHeight: 1.4,
+              background: m.is_mine ? '#16A34A' : '#F3F4F6',
+              color: m.is_mine ? 'white' : '#0D1F3C',
+              borderBottomRightRadius: m.is_mine ? 4 : 18,
+              borderBottomLeftRadius: m.is_mine ? 18 : 4,
+            }}>
+              <p style={{ margin: 0 }}>{m.content}</p>
+              <p style={{ margin: '4px 0 0', fontSize: 10, opacity: 0.6 }}>
                 {new Date(m.created_at).toLocaleTimeString('en-NG', { hour: '2-digit', minute: '2-digit' })}
               </p>
             </div>
@@ -288,14 +293,17 @@ function StudentChatModal({ session, onClose }) {
         ))}
         <div ref={bottomRef} />
       </div>
-      {/* Input — fixed above bottom nav (z-60 beats nav z-50) */}
-      <div className="fixed bottom-0 left-0 right-0 z-60 px-4 py-3 border-t border-gray-100 flex gap-2 bg-white"
-           style={{ paddingBottom: 'calc(env(safe-area-inset-bottom) + 12px)' }}>
-        <input className="flex-1 reads-input" placeholder="Type a message…"
-          value={text} onChange={e => setText(e.target.value)}
-          onKeyDown={e => e.key === 'Enter' && !e.shiftKey && send()} />
+      {/* Input */}
+      <div style={{ flexShrink: 0, borderTop: '1px solid #f3f4f6', padding: '12px 16px', display: 'flex', gap: 8, background: 'white' }}>
+        <input
+          style={{ flex: 1, border: '1.5px solid #e5e7eb', borderRadius: 12, padding: '10px 14px', fontSize: 14, outline: 'none', background: 'white' }}
+          placeholder="Type a message…"
+          value={text}
+          onChange={e => setText(e.target.value)}
+          onKeyDown={e => e.key === 'Enter' && !e.shiftKey && send()}
+        />
         <button onClick={send} disabled={sending || !text.trim()}
-          className="bg-reads-green text-white px-4 py-2 rounded-xl font-bold text-sm disabled:opacity-50 flex items-center">
+          style={{ background: '#16A34A', color: 'white', border: 'none', borderRadius: 12, padding: '10px 18px', fontWeight: 700, fontSize: 14, cursor: 'pointer', opacity: (sending || !text.trim()) ? 0.5 : 1, display: 'flex', alignItems: 'center' }}>
           {sending ? <Loader2 size={16} className="animate-spin" /> : 'Send'}
         </button>
       </div>
