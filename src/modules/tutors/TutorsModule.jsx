@@ -394,6 +394,58 @@ function DisputeModal({ session, onClose, onDisputed }) {
   );
 }
 
+
+// ── End Session Early Modal ───────────────────────────────────────────────────
+function EndEarlyModal({ session, onClose, onEnded }) {
+  const [loading, setLoading] = useState(false);
+  const [error, setError]     = useState('');
+
+  const now = new Date();
+  const scheduled = new Date(session.scheduled_at);
+  const hoursUntil = (scheduled - now) / (1000 * 60 * 60);
+  const refund = hoursUntil >= 24
+    ? session.cost_tokens
+    : Math.round(session.cost_tokens * 0.5);
+  const isPartial = hoursUntil < 24;
+
+  const handle = async () => {
+    setLoading(true);
+    try {
+      await api.tutors.cancelSession(session.id, 'Student ended session early');
+      onEnded();
+    } catch (e) { setError(e.message); }
+    finally { setLoading(false); }
+  };
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-end justify-center p-4 pb-6">
+      <div className="absolute inset-0 bg-black/40" onClick={onClose} />
+      <div className="relative bg-white rounded-2xl shadow-2xl w-full max-w-sm animate-slide-up p-5 space-y-4">
+        <h3 className="font-black text-reads-navy text-base">End Session Early?</h3>
+        <div className={`rounded-xl p-3 ${isPartial ? 'bg-amber-50 border border-amber-200' : 'bg-green-50 border border-green-200'}`}>
+          <p className={`text-xs font-semibold ${isPartial ? 'text-amber-700' : 'text-reads-green'}`}>
+            {isPartial
+              ? `Session is within 24 hours. You will receive a 50% refund of ${refund} $READS.`
+              : `Full refund of ${refund} $READS will be returned to your wallet.`}
+          </p>
+        </div>
+        <p className="text-reads-muted text-xs">
+          The tutor will be notified. This action cannot be undone.
+        </p>
+        {error && <p className="text-reads-red text-sm">{error}</p>}
+        <div className="flex gap-3">
+          <button onClick={onClose} className="flex-1 reads-btn-outline">Keep Session</button>
+          <button onClick={handle} disabled={loading}
+            className="flex-1 text-white font-bold py-3 rounded-xl bg-reads-red flex items-center justify-center gap-2">
+            {loading && <Loader2 size={15} className="animate-spin" />}
+            End Session
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // ── My Sessions (student) ─────────────────────────────────────────────────────
 function MySessionsView({ onBack }) {
   const [sessions, setSessions] = useState([]);
@@ -401,6 +453,7 @@ function MySessionsView({ onBack }) {
   const [chatSession, setChatSession] = useState(null);
   const [rateSession, setRateSession] = useState(null);
   const [disputeSession, setDisputeSession] = useState(null);
+  const [endSession, setEndSession] = useState(null);
   const [toast, setToast] = useState(null);
   const showToast = (msg, type = 'success') => { setToast({ msg, type }); setTimeout(() => setToast(null), 3000); };
 
@@ -469,6 +522,12 @@ function MySessionsView({ onBack }) {
                         <MessageCircle size={12} /> Chat
                       </button>
                     )}
+                    {s.status === 'confirmed' && (
+                      <button onClick={() => setEndSession(s)}
+                        className="flex items-center gap-1 text-reads-red text-xs font-bold px-3 py-1.5 bg-red-50 rounded-lg">
+                        <XCircle size={12} /> End Early
+                      </button>
+                    )}
                     {s.status === 'completing' && (
                       <>
                         <button onClick={() => handleConfirm(s.id)}
@@ -501,6 +560,7 @@ function MySessionsView({ onBack }) {
       {chatSession     && <StudentChatModal session={chatSession} onClose={() => setChatSession(null)} />}
       {rateSession     && <RateModal session={rateSession} onClose={() => setRateSession(null)} onRated={() => { setRateSession(null); showToast('Rating submitted!'); load(); }} />}
       {disputeSession  && <DisputeModal session={disputeSession} onClose={() => setDisputeSession(null)} onDisputed={() => { setDisputeSession(null); showToast('Dispute raised. Admin will review.'); load(); }} />}
+      {endSession && <EndEarlyModal session={endSession} onClose={() => setEndSession(null)} onEnded={() => { setEndSession(null); showToast('Session ended. Refund processed.'); load(); }} />}
       {toast && (
         <div className={`fixed bottom-20 left-1/2 -translate-x-1/2 z-50 px-5 py-3 rounded-2xl shadow-xl text-sm font-semibold ${
           toast.type === 'error' ? 'bg-red-50 text-red-600' : 'bg-green-50 text-reads-green'
