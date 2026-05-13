@@ -21,7 +21,6 @@ import SettingsModule       from './modules/settings/SettingsModule.jsx';
 import NotificationInbox    from './modules/notifications/NotificationInbox.jsx';
 import SchoolModule         from './modules/school/SchoolModule.jsx';
 import StudentPortalModule  from './modules/school/StudentPortalModule.jsx';
-import ChallengeModule      from './modules/challenges/ChallengeModule.jsx';
 import TutorsModule         from './modules/tutors/TutorsModule.jsx';
 import ExamsModule          from './modules/exams/ExamsModule.jsx';
 import MarketplaceModule    from './modules/marketplace/MarketplaceModule.jsx';
@@ -30,6 +29,7 @@ import AdminModule          from './modules/admin/AdminModule.jsx';
 import PartnerModule        from './modules/partner/PartnerModule.jsx';
 import CbtModule           from './modules/partner/CbtModule.jsx';
 import TutorPortalModule   from './modules/tutors/TutorPortalModule.jsx';
+import ChallengeModule     from './modules/challenge/ChallengeModule.jsx';
 
 // ─────────────────────────────────────────────
 // "More" tile grid
@@ -317,7 +317,7 @@ export default function App() {
           <StudentPortalModule onBack={() => navigate('more')} />
         )}
         {view === 'challenge' && (
-          <ChallengeModule onBack={() => navigate('more')} />
+          <ChallengeModule user={user} onBack={() => navigate('more')} />
         )}
 
         {view === 'tutors' && (

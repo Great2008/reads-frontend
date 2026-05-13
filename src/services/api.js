@@ -305,6 +305,19 @@ export const tutors = {
   rateSession: (session_id, stars, comment) => post(`/tutors/sessions/${session_id}/rate`, { stars, comment }),
 };
 
+// ── Tournament ───────────────────────────────────────────────────────────────
+export const tournament = {
+  list: () => get('/tournaments'),
+  getLeaderboard: (id, scope = 'all', schoolId = null) => {
+    const params = new URLSearchParams({ scope });
+    if (schoolId) params.set('school_id', schoolId);
+    return get(`/tournaments/${id}/leaderboard?${params}`);
+  },
+  startQuiz: (id) => post(`/tournaments/${id}/start-quiz`, {}),
+  submitQuiz: (id, data) => post(`/tournaments/${id}/submit-quiz`, data),
+  reportCheat: (data) => post('/tournaments/cheat-event', data),
+};
+
 // ── Wallet ────────────────────────────────────────────────────────────────────
 export const wallet = {
   getBalance: async () => {
@@ -482,8 +495,13 @@ export const admin = {
   releaseExamEscrow: (id) => post(`/admin/exams/registrations/${id}/release-escrow`, {}),
 
   // Tournament
-  listTournaments: () => get('/admin/tournaments/list'),
-  createTournament: (data) => post('/admin/tournaments/admin/create', data),
+  listTournaments: () => get('/tournaments/admin/list'),
+  createTournament: (data) => post('/tournaments/admin/create', data),
+  setTournamentStatus: (id, status) => patch(`/tournaments/admin/${id}/status?status=${status}`, {}),
+  getTournamentStandingsAdmin: (id) => get(`/tournaments/admin/${id}/standings`),
+  advanceTop3: (id) => post(`/tournaments/admin/${id}/advance-top3`, {}),
+  getCheatFlags: () => get('/tournaments/admin/flags'),
+  reviewFlag: (id, decision) => patch(`/tournaments/admin/flags/${id}/review`, { decision }),
   getTournamentLeaderboard: (params = {}) => {
     const q = new URLSearchParams(params).toString();
     return get(`/admin/tournaments/admin/leaderboard${q ? '?' + q : ''}`);

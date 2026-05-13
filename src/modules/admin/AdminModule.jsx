@@ -247,10 +247,13 @@ function LessonsSection() {
   };
 
   const loadLessons = () => {
-    api.admin.getLessons({ limit: 100 })
-      .then((d) => setLessons(d?.lessons || []))
-      .catch(() => {})
-      .finally(() => setLoading(false));
+    Promise.all([
+      api.admin.getLessons({ limit: 100 }),
+      api.admin.getSchools(),
+    ]).then(([ld, sd]) => {
+      setLessons(ld?.lessons || []);
+      setSchools(sd?.schools || []);
+    }).catch(() => {}).finally(() => setLoading(false));
   };
 
   useEffect(() => { loadLessons(); }, []);
@@ -290,6 +293,7 @@ function LessonsSection() {
       quiz_questions_per_attempt: lesson.quiz_questions_per_attempt ?? null,
       quiz_min_read_secs: lesson.quiz_min_read_secs ?? 30,
       quiz_shuffle: lesson.quiz_shuffle ?? true,
+      school_id: lesson.school_id || null,
     });
   };
 
@@ -433,6 +437,16 @@ function LessonsSection() {
                 onChange={(e) => setEditForm((f) => ({ ...f, is_general: e.target.checked, school_id: e.target.checked ? null : f.school_id }))} />
               <label htmlFor="is_general" className="reads-label mb-0">General lesson (visible to all students)</label>
             </div>
+            {!editForm.is_general && (
+              <div>
+                <label className="reads-label">Scope to School <span className="text-reads-muted font-normal">(leave blank for all schools)</span></label>
+                <select className="reads-input" value={editForm.school_id || ''}
+                  onChange={(e) => setEditForm((f) => ({ ...f, school_id: e.target.value || null }))}>
+                  <option value="">All Schools</option>
+                  {schools.map(s => <option key={s.id} value={s.id}>{s.name} ({s.school_code})</option>)}
+                </select>
+              </div>
+            )}
 
             {/* ── Quiz Configuration ── */}
             <div className="border-t border-gray-100 pt-4">
@@ -825,6 +839,220 @@ function SchoolCurriculumSection() {
 // ─────────────────────────────────────────────
 // Exam Management Section
 // ─────────────────────────────────────────────
+
+
+// ── Tournaments Section ───────────────────────────────────────────────────────
+function TournamentsSection() {
+  const [tournaments, setTournaments] = useState([]);
+  const [flags, setFlags]           = useState([]);
+  const [loading, setLoading]       = useState(true);
+  const [view, setView]             = useState('list'); // list | create | flags | standings
+  const [selected, setSelected]     = useState(null);
+  const [standings, setStandings]   = useState([]);
+  const [toast, setToast]           = useState(null);
+  const showToast = (msg, type='success') => { setToast({msg,type}); setTimeout(()=>setToast(null),3000); };
+
+  const [form, setForm] = useState({
+    name: '', stage: 'school', age_category: 'open', subject: '',
+    questions_per_round: 10, time_per_question: 30, points_per_correct: 5,
+    prize_tokens: 0, prize_2nd: 0, prize_3rd: 0,
+    duration_days: 14, start_date: '', end_date: '', school_id: '', state: '',
+  });
+
+  const load = () => {
+    setLoading(true);
+    Promise.all([api.admin.listTournaments(), api.admin.getCheatFlags()])
+      .then(([td, fd]) => { setTournaments(td?.tournaments || []); setFlags(fd?.flags || []); })
+      .catch(()=>{}).finally(()=>setLoading(false));
+  };
+
+  useEffect(()=>{ load(); },[]);
+
+  const handleCreate = async () => {
+    try {
+      await api.admin.createTournament({
+        ...form,
+        questions_per_round: parseInt(form.questions_per_round),
+        time_per_question: parseInt(form.time_per_question),
+        points_per_correct: parseInt(form.points_per_correct),
+        prize_tokens: parseInt(form.prize_tokens),
+        prize_2nd: parseInt(form.prize_2nd),
+        prize_3rd: parseInt(form.prize_3rd),
+        duration_days: parseInt(form.duration_days),
+        school_id: form.school_id || null,
+        state: form.state || null,
+      });
+      showToast('Tournament created!');
+      setView('list');
+      load();
+    } catch(e) { showToast(e.message, 'error'); }
+  };
+
+  const handleStatus = async (id, status) => {
+    try {
+      await api.admin.setTournamentStatus(id, status);
+      showToast(`Tournament ${status}`);
+      load();
+    } catch(e) { showToast(e.message, 'error'); }
+  };
+
+  const handleAdvance = async (id) => {
+    try {
+      const res = await api.admin.advanceTop3(id);
+      showToast(res.message);
+    } catch(e) { showToast(e.message, 'error'); }
+  };
+
+  const handleViewStandings = async (t) => {
+    setSelected(t);
+    const d = await api.admin.getTournamentStandingsAdmin(t.id).catch(()=>({standings:[]}));
+    setStandings(d.standings || []);
+    setView('standings');
+  };
+
+  const handleReviewFlag = async (id, decision) => {
+    try {
+      await api.admin.reviewFlag(id, decision);
+      showToast(`Flag marked ${decision}`);
+      load();
+    } catch(e) { showToast(e.message, 'error'); }
+  };
+
+  const STAGE_COLOR = { school:'bg-green-100 text-reads-green', state:'bg-blue-100 text-blue-700', national:'bg-purple-100 text-purple-700', global:'bg-amber-100 text-amber-700' };
+  const STATUS_COLOR = { upcoming:'bg-gray-100 text-gray-600', active:'bg-green-100 text-reads-green', completed:'bg-blue-100 text-blue-700' };
+  const set = k => e => setForm(f=>({...f,[k]:e.target.value}));
+
+  if (view === 'standings' && selected) return (
+    <div className="space-y-3">
+      <button onClick={()=>setView('list')} className="text-reads-muted text-sm">← Back</button>
+      <SectionHeader title={selected.name} subtitle="Standings" />
+      <button onClick={()=>handleAdvance(selected.id)} className="reads-btn-primary w-full">Advance Top 3 to Next Stage</button>
+      {standings.map((s,i) => (
+        <div key={s.user_id} className="reads-card p-3 flex items-center gap-3">
+          <span className="font-black text-reads-navy w-6 text-center">{i===0?'🥇':i===1?'🥈':i===2?'🥉':`#${i+1}`}</span>
+          <div className="flex-1 min-w-0">
+            <p className="font-bold text-reads-navy text-sm truncate">{s.full_name}</p>
+            <p className="text-reads-muted text-xs">{s.school || 'Unaffiliated'} · {s.state || '—'}</p>
+          </div>
+          <div className="text-right">
+            <p className="font-black text-reads-navy text-sm">{s.total_points} pts</p>
+            <p className="text-reads-muted text-xs">{s.quizzes_taken} rounds</p>
+            {s.is_disqualified && <span className="text-reads-red text-[10px] font-bold">DQ</span>}
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+
+  if (view === 'flags') return (
+    <div className="space-y-3">
+      <button onClick={()=>setView('list')} className="text-reads-muted text-sm">← Back</button>
+      <SectionHeader title="Cheat Flags" subtitle={`${flags.filter(f=>f.status==='pending').length} pending`} />
+      {flags.length === 0 ? <EmptyState icon={Shield} title="No flags" description="All clear." />
+      : flags.map(f => (
+        <div key={f.id} className="reads-card p-4">
+          <div className="flex justify-between items-start mb-2">
+            <div>
+              <p className="font-bold text-reads-navy text-sm">{f.user_name}</p>
+              <p className="text-reads-muted text-xs">{f.tournament_name}</p>
+            </div>
+            <span className="text-[10px] bg-amber-50 text-amber-700 font-bold px-2 py-1 rounded-full capitalize">{f.flag_type.replace('_',' ')}</span>
+          </div>
+          <p className="text-reads-muted text-xs mb-2">Total flags: {f.total_flags} · Tab: {f.flag_data?.tab_switches||0} · Copy: {f.flag_data?.copy_attempts||0}</p>
+          {f.status === 'pending' && (
+            <div className="flex gap-2">
+              <button onClick={()=>handleReviewFlag(f.id,'guilty')} className="flex-1 text-white text-xs font-bold py-2 rounded-xl bg-reads-red">Guilty</button>
+              <button onClick={()=>handleReviewFlag(f.id,'cleared')} className="flex-1 reads-btn-outline text-xs py-2">Clear</button>
+            </div>
+          )}
+          {f.status !== 'pending' && <p className={`text-xs font-bold capitalize ${f.status==='guilty'?'text-reads-red':'text-reads-green'}`}>{f.status}</p>}
+        </div>
+      ))}
+    </div>
+  );
+
+  if (view === 'create') return (
+    <div className="space-y-4">
+      <button onClick={()=>setView('list')} className="text-reads-muted text-sm">← Back</button>
+      <SectionHeader title="Create Tournament" subtitle="Set up a new challenge" />
+      <div><label className="reads-label">Name</label><input className="reads-input" value={form.name} onChange={set('name')} placeholder="e.g. JSS1 Mathematics Challenge Q1" /></div>
+      <div className="grid grid-cols-2 gap-3">
+        <div><label className="reads-label">Stage</label>
+          <select className="reads-input" value={form.stage} onChange={set('stage')}>
+            {['school','state','national','global'].map(s=><option key={s}>{s}</option>)}
+          </select>
+        </div>
+        <div><label className="reads-label">Age Category</label>
+          <select className="reads-input" value={form.age_category} onChange={set('age_category')}>
+            {['u15','u17','u21','open'].map(s=><option key={s}>{s}</option>)}
+          </select>
+        </div>
+      </div>
+      <div><label className="reads-label">Subject</label><input className="reads-input" value={form.subject} onChange={set('subject')} placeholder="e.g. Mathematics" /></div>
+      <div className="grid grid-cols-3 gap-3">
+        <div><label className="reads-label">Questions</label><input className="reads-input" type="number" value={form.questions_per_round} onChange={set('questions_per_round')} /></div>
+        <div><label className="reads-label">Secs/Q</label><input className="reads-input" type="number" value={form.time_per_question} onChange={set('time_per_question')} /></div>
+        <div><label className="reads-label">Pts/Correct</label><input className="reads-input" type="number" value={form.points_per_correct} onChange={set('points_per_correct')} /></div>
+      </div>
+      <div className="grid grid-cols-3 gap-3">
+        <div><label className="reads-label">🥇 Prize</label><input className="reads-input" type="number" value={form.prize_tokens} onChange={set('prize_tokens')} /></div>
+        <div><label className="reads-label">🥈 Prize</label><input className="reads-input" type="number" value={form.prize_2nd} onChange={set('prize_2nd')} /></div>
+        <div><label className="reads-label">🥉 Prize</label><input className="reads-input" type="number" value={form.prize_3rd} onChange={set('prize_3rd')} /></div>
+      </div>
+      <div className="grid grid-cols-2 gap-3">
+        <div><label className="reads-label">Start Date</label><input className="reads-input" type="datetime-local" value={form.start_date} onChange={set('start_date')} /></div>
+        <div><label className="reads-label">End Date</label><input className="reads-input" type="datetime-local" value={form.end_date} onChange={set('end_date')} /></div>
+      </div>
+      <div><label className="reads-label">Scope to School (optional)</label><input className="reads-input" value={form.school_id} onChange={set('school_id')} placeholder="School UUID or leave blank" /></div>
+      <div><label className="reads-label">Scope to State (optional)</label><input className="reads-input" value={form.state} onChange={set('state')} placeholder="e.g. Rivers State" /></div>
+      <button onClick={handleCreate} className="reads-btn-primary w-full">Create Tournament</button>
+      {toast && <Toast message={toast.msg} type={toast.type} onClose={()=>setToast(null)} />}
+    </div>
+  );
+
+  return (
+    <div className="space-y-4">
+      <div className="flex items-center justify-between">
+        <SectionHeader title="Tournaments" subtitle={`${tournaments.length} total`} />
+        <div className="flex gap-2">
+          <button onClick={()=>setView('flags')}
+            className={`text-xs font-bold px-3 py-1.5 rounded-xl ${flags.filter(f=>f.status==='pending').length > 0 ? 'bg-reads-red text-white' : 'bg-gray-100 text-reads-muted'}`}>
+            🚩 {flags.filter(f=>f.status==='pending').length} Flags
+          </button>
+          <button onClick={()=>setView('create')} className="reads-btn-primary text-xs px-3 py-1.5">+ New</button>
+        </div>
+      </div>
+
+      {loading ? <LoadingOverlay /> : tournaments.length === 0 ? (
+        <EmptyState icon={Trophy} title="No tournaments" description="Create your first tournament." />
+      ) : tournaments.map(t => (
+        <div key={t.id} className="reads-card p-4">
+          <div className="flex items-start justify-between mb-2">
+            <div>
+              <p className="font-bold text-reads-navy text-sm">{t.name}</p>
+              <div className="flex gap-1.5 mt-1">
+                <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full capitalize ${STAGE_COLOR[t.stage]||''}`}>{t.stage}</span>
+                <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full capitalize ${STATUS_COLOR[t.status]||''}`}>{t.status}</span>
+                {t.subject && <span className="text-[10px] font-semibold text-reads-muted bg-gray-100 px-2 py-0.5 rounded-full">{t.subject}</span>}
+              </div>
+            </div>
+            <span className="text-reads-muted text-xs">{t.participants} participants</span>
+          </div>
+          <div className="flex gap-1 text-[10px] text-reads-muted mb-3">
+            <span>{t.questions_per_round}Q · {t.time_per_question}s · {t.points_per_correct||5}pts</span>
+            <span className="ml-2">🥇{t.prize_tokens} 🥈{t.prize_2nd} 🥉{t.prize_3rd}</span>
+          </div>
+          <div className="flex gap-2 flex-wrap">
+            <button onClick={()=>handleViewStandings(t)} className="text-xs font-bold px-3 py-1.5 bg-gray-100 text-reads-navy rounded-lg">Standings</button>
+            {t.status === 'upcoming' && <button onClick={()=>handleStatus(t.id,'active')} className="text-xs font-bold px-3 py-1.5 bg-reads-green text-white rounded-lg">Activate</button>}
+            {t.status === 'active'   && <button onClick={()=>handleStatus(t.id,'completed')} className="text-xs font-bold px-3 py-1.5 bg-reads-navy text-white rounded-lg">End & Award</button>}
+          </div>
+        </div>
+      ))}
+      {toast && <Toast message={toast.msg} type={toast.type} onClose={()=>setToast(null)} />}
+    </div>
+  );
+}
 
 // ── Disputes Section ──────────────────────────────────────────────────────────
 function DisputesSection() {
@@ -1702,6 +1930,7 @@ const ADMIN_NAV = [
   { key: 'exams',        label: 'Exams',        icon: ClipboardList },
   { key: 'quiz',         label: 'Quiz',         icon: HelpCircle },
   { key: 'disputes',     label: 'Disputes',     icon: AlertTriangle },
+  { key: 'tournaments',  label: 'Tournaments',  icon: Trophy },
   { key: 'curriculum',  label: 'Curriculum',  icon: FileText },
   { key: 'audit-log',   label: 'Audit Log',   icon: ClipboardList },
   { key: 'notifications', label: 'Notify',       icon: Bell },
@@ -1750,6 +1979,7 @@ export default function AdminModule({ currentUserId }) {
       {section === 'exams'         && <ExamSection />}
       {section === 'quiz'          && <QuizSection />}
       {section === 'disputes'      && <DisputesSection />}
+      {section === 'tournaments'    && <TournamentsSection />}
       {section === 'curriculum'    && <SchoolCurriculumSection />}
     </div>
   );
