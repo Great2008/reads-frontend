@@ -240,7 +240,8 @@ function LessonsSection() {
   const [editLesson, setEditLesson] = useState(null);
   const [editForm, setEditForm] = useState({});
   const [editSaving, setEditSaving] = useState(false);
-  const [toast, setToast] = useState(null);
+const [toast, setToast] = useState(null);
+const [schools, setSchools] = useState([]);   //
 
   const showToast = (msg, type = 'success') => {
     setToast({ msg, type }); setTimeout(() => setToast(null), 3000);
