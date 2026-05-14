@@ -305,18 +305,6 @@ export const tutors = {
   rateSession: (session_id, stars, comment) => post(`/tutors/sessions/${session_id}/rate`, { stars, comment }),
 };
 
-// ── Tournament ───────────────────────────────────────────────────────────────
-export const tournament = {
-  list: () => get('/tournaments'),
-  getLeaderboard: (id, scope = 'all', schoolId = null) => {
-    const params = new URLSearchParams({ scope });
-    if (schoolId) params.set('school_id', schoolId);
-    return get(`/tournaments/${id}/leaderboard?${params}`);
-  },
-  startQuiz: (id) => post(`/tournaments/${id}/start-quiz`, {}),
-  submitQuiz: (id, data) => post(`/tournaments/${id}/submit-quiz`, data),
-  reportCheat: (data) => post('/tournaments/cheat-event', data),
-};
 
 // ── Wallet ────────────────────────────────────────────────────────────────────
 export const wallet = {

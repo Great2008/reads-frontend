@@ -285,7 +285,6 @@ function LessonsSection() {
       track: lesson.track || 'school',
       token_reward: lesson.token_reward || 10,
       is_general: lesson.is_general || false,
-      school_id: lesson.school_id || null,
       quiz_pass_mark: lesson.quiz_pass_mark ?? 60,
       quiz_perfect_bonus: lesson.quiz_perfect_bonus ?? 0,
       quiz_time_limit_secs: lesson.quiz_time_limit_secs ?? null,
