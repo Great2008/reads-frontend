@@ -502,17 +502,7 @@ export const admin = {
   advanceTop3: (id) => post(`/tournaments/admin/${id}/advance-top3`, {}),
   getCheatFlags: () => get('/tournaments/admin/flags'),
   reviewFlag: (id, decision) => patch(`/tournaments/admin/flags/${id}/review`, { decision }),
-  getTournamentLeaderboard: (params = {}) => {
-    const q = new URLSearchParams(params).toString();
-    return get(`/admin/tournaments/admin/leaderboard${q ? '?' + q : ''}`);
-  },
-  getTournamentStandings: (id) => get(`/admin/tournaments/admin/${id}/standings`),
-  qualifyTop3: (id) => post(`/admin/tournaments/admin/${id}/qualify-top3`, {}),
-  getCheatFlags: (params = {}) => {
-    const q = new URLSearchParams(params).toString();
-    return get(`/admin/tournaments/admin/flags${q ? '?' + q : ''}`);
-  },
-  reviewCheatFlag: (id, data) => patch(`/admin/tournaments/admin/flags/${id}/review`, data),
+  // (old stale endpoints removed — use api.tournament or api.admin.listTournaments etc.)
 
   // Schools
   getSchools: () => get('/admin/schools'),

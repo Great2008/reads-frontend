@@ -146,6 +146,7 @@ const RegisterView = ({ onSuccess, onBack }) => {
   const [accountType, setAccountType] = useState(''); // student | partner
   const [form, setForm] = useState({
     full_name: '', email: '', phone: '', password: '', confirmPw: '',
+    birth_year: '', state: '',
     primary_track: 'school', school_code: '', partner_type: '',
     business_name: '', contact_email: '',
   });
@@ -184,6 +185,8 @@ const RegisterView = ({ onSuccess, onBack }) => {
           password: form.password,
           primary_track: form.primary_track,
           school_code: form.school_code.trim() || undefined,
+          birth_year: form.birth_year ? parseInt(form.birth_year) : undefined,
+          state: form.state.trim() || undefined,
         });
         onSuccess({ userId: result.user_id, email: form.email });
       } else {
@@ -250,6 +253,19 @@ const RegisterView = ({ onSuccess, onBack }) => {
         <Field icon={User} placeholder="Full name" value={form.full_name} onChange={set('full_name')} error={errors.full_name} />
         <Field icon={Mail} type="email" placeholder="Email address" value={form.email} onChange={set('email')} error={errors.email} />
         <Field icon={Phone} type="tel" placeholder="Phone number" value={form.phone} onChange={set('phone')} error={errors.phone} />
+        <div className="grid grid-cols-2 gap-3">
+          <div>
+            <label className="reads-label">Birth Year</label>
+            <input className="reads-input" type="number" placeholder="e.g. 2005"
+              min="1950" max={new Date().getFullYear()}
+              value={form.birth_year} onChange={set('birth_year')} />
+          </div>
+          <div>
+            <label className="reads-label">State</label>
+            <input className="reads-input" placeholder="e.g. Rivers State"
+              value={form.state} onChange={set('state')} />
+          </div>
+        </div>
 
         {accountType === 'student' && (
           <div>

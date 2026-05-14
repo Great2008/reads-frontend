@@ -11,6 +11,8 @@ const EditProfileModal = ({ user, onClose, onSaved }) => {
   const [form, setForm] = useState({
     full_name: user.full_name || '',
     phone: user.phone || '',
+    birth_year: user.birth_year ? String(user.birth_year) : '',
+    state: user.state || '',
   });
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
@@ -19,8 +21,12 @@ const EditProfileModal = ({ user, onClose, onSaved }) => {
     if (!form.full_name.trim()) return setError('Name is required.');
     setLoading(true);
     try {
-      await api.auth.updateProfile(form);
-      onSaved(form);
+      await api.auth.updateProfile({
+        ...form,
+        birth_year: form.birth_year ? parseInt(form.birth_year) : null,
+        state: form.state.trim() || null,
+      });
+      onSaved({ ...form, birth_year: form.birth_year ? parseInt(form.birth_year) : null });
     } catch (e) {
       setError(e.message);
     } finally { setLoading(false); }
@@ -38,6 +44,21 @@ const EditProfileModal = ({ user, onClose, onSaved }) => {
           <label className="reads-label">Phone</label>
           <input className="reads-input" type="tel" value={form.phone}
             onChange={(e) => setForm((f) => ({ ...f, phone: e.target.value }))} />
+        </div>
+        <div className="grid grid-cols-2 gap-3">
+          <div>
+            <label className="reads-label">Birth Year</label>
+            <input className="reads-input" type="number" placeholder="e.g. 2005"
+              min="1950" max={new Date().getFullYear()}
+              value={form.birth_year}
+              onChange={(e) => setForm((f) => ({ ...f, birth_year: e.target.value }))} />
+          </div>
+          <div>
+            <label className="reads-label">State</label>
+            <input className="reads-input" placeholder="e.g. Rivers State"
+              value={form.state}
+              onChange={(e) => setForm((f) => ({ ...f, state: e.target.value }))} />
+          </div>
         </div>
         {error && <p className="text-reads-red text-sm">{error}</p>}
         <button onClick={save} disabled={loading}
@@ -250,7 +271,7 @@ export default function ProfileModule({ user, tokenBalance, onLogout, onUserUpda
         <p className="text-reads-muted text-xs font-semibold uppercase tracking-wide py-3">Account</p>
         <div className="divide-y divide-gray-50">
           <SettingRow icon={Edit2} iconBg="bg-reads-green-bg" iconColor="text-reads-green"
-            label="Edit Profile" sub="Name, phone" onClick={() => setModal('edit')} />
+            label="Edit Profile" sub="Name, phone, birth year, state" onClick={() => setModal('edit')} />
           <SettingRow icon={Shield} iconBg="bg-reads-navy/10" iconColor="text-reads-navy"
             label="Change Password" onClick={() => setModal('password')} />
           <SettingRow icon={Bell} iconBg="bg-reads-gold/10" iconColor="text-reads-gold-dark"
