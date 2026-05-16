@@ -240,8 +240,7 @@ function LessonsSection() {
   const [editLesson, setEditLesson] = useState(null);
   const [editForm, setEditForm] = useState({});
   const [editSaving, setEditSaving] = useState(false);
-const [toast, setToast] = useState(null);
-const [schools, setSchools] = useState([]);   //
+  const [toast, setToast] = useState(null);
 
   const showToast = (msg, type = 'success') => {
     setToast({ msg, type }); setTimeout(() => setToast(null), 3000);
@@ -286,6 +285,7 @@ const [schools, setSchools] = useState([]);   //
       track: lesson.track || 'school',
       token_reward: lesson.token_reward || 10,
       is_general: lesson.is_general || false,
+      school_id: lesson.school_id || null,
       quiz_pass_mark: lesson.quiz_pass_mark ?? 60,
       quiz_perfect_bonus: lesson.quiz_perfect_bonus ?? 0,
       quiz_time_limit_secs: lesson.quiz_time_limit_secs ?? null,
@@ -861,7 +861,7 @@ function TournamentsSection() {
 
   const load = () => {
     setLoading(true);
-    Promise.all([api.admin.listTournaments(), api.admin.getCheatFlags()])
+    Promise.all([api.tournament.adminList(), api.tournament.adminFlags()])
       .then(([td, fd]) => { setTournaments(td?.tournaments || []); setFlags(fd?.flags || []); })
       .catch(()=>{}).finally(()=>setLoading(false));
   };
@@ -870,7 +870,7 @@ function TournamentsSection() {
 
   const handleCreate = async () => {
     try {
-      await api.admin.createTournament({
+      await api.tournament.adminCreate({
         ...form,
         questions_per_round: parseInt(form.questions_per_round),
         time_per_question: parseInt(form.time_per_question),
@@ -890,7 +890,7 @@ function TournamentsSection() {
 
   const handleStatus = async (id, status) => {
     try {
-      await api.admin.setTournamentStatus(id, status);
+      await api.tournament.adminSetStatus(id, status);
       showToast(`Tournament ${status}`);
       load();
     } catch(e) { showToast(e.message, 'error'); }
@@ -898,21 +898,21 @@ function TournamentsSection() {
 
   const handleAdvance = async (id) => {
     try {
-      const res = await api.admin.advanceTop3(id);
+      const res = await api.tournament.adminAdvanceTop3(id);
       showToast(res.message);
     } catch(e) { showToast(e.message, 'error'); }
   };
 
   const handleViewStandings = async (t) => {
     setSelected(t);
-    const d = await api.admin.getTournamentStandingsAdmin(t.id).catch(()=>({standings:[]}));
+    const d = await api.tournament.adminStandings(t.id).catch(()=>({standings:[]}));
     setStandings(d.standings || []);
     setView('standings');
   };
 
   const handleReviewFlag = async (id, decision) => {
     try {
-      await api.admin.reviewFlag(id, decision);
+      await api.tournament.adminReviewFlag(id, decision);
       showToast(`Flag marked ${decision}`);
       load();
     } catch(e) { showToast(e.message, 'error'); }
@@ -1448,7 +1448,7 @@ function TournamentSection() {
   const showToast = (msg, type="success") => { setToast({msg,type}); setTimeout(()=>setToast(null),3500); };
 
   const loadTournaments = () => {
-    api.admin.listTournaments()
+    api.tournament.adminList()
       .then(d => setTournaments(d?.tournaments || []))
       .catch(() => {})
       .finally(() => setLoading(false));
@@ -1491,7 +1491,7 @@ function TournamentSection() {
     if (!form.name || selectedUsers.length === 0) return showToast("Fill name and select participants", "error");
     setSaving(true);
     try {
-      const res = await api.admin.createTournament({
+      const res = await api.tournament.adminCreate({
         ...form,
         participant_ids: selectedUsers.map(u => u.id),
       });

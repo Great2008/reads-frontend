@@ -305,7 +305,6 @@ export const tutors = {
   rateSession: (session_id, stars, comment) => post(`/tutors/sessions/${session_id}/rate`, { stars, comment }),
 };
 
-
 // ── Wallet ────────────────────────────────────────────────────────────────────
 export const wallet = {
   getBalance: async () => {
@@ -573,30 +572,27 @@ const upload = async (path, formData) => {
 };
 // ── Single export ──────────────────────────────────────────────────────────────
 
-// ── Tournament / Smart User Challenge ─────────────────────────────────────────
+// ── Tournament / Smart Challenge ─────────────────────────────────────────────
 export const tournament = {
-  // Student
-  getMyInvite: () => get('/tournaments/my-invite'),
-  join: (data) => post('/tournaments/join', data),
-  startQuiz: (tournament_id) => post(`/tournaments/${tournament_id}/start-quiz`, {}),
-  submitQuiz: (tournament_id, data) => post(`/tournaments/${tournament_id}/submit-quiz`, data),
-  getStandings: (tournament_id) => get(`/tournaments/${tournament_id}/standings`),
-  submitFlag: (data) => post('/tournaments/flag', data),
+  // Student-facing
+  list: () => get('/tournaments'),
+  getLeaderboard: (id, scope = 'all', schoolId = null) => {
+    const params = new URLSearchParams({ scope });
+    if (schoolId) params.set('school_id', schoolId);
+    return get(`/tournaments/${id}/leaderboard?${params}`);
+  },
+  startQuiz: (id) => post(`/tournaments/${id}/start-quiz`, {}),
+  submitQuiz: (id, data) => post(`/tournaments/${id}/submit-quiz`, data),
+  reportCheat: (data) => post('/tournaments/cheat-event', data),
 
-  // Admin
-  getLeaderboard: (params = {}) => {
-    const q = new URLSearchParams(params).toString();
-    return get(`/tournaments/admin/leaderboard${q ? '?' + q : ''}`);
-  },
-  create: (data) => post('/tournaments/admin/create', data),
-  list: () => get('/tournaments/admin/list'),
-  getAdminStandings: (id) => get(`/tournaments/admin/${id}/standings`),
-  qualifyTop3: (id) => post(`/tournaments/admin/${id}/qualify-top3`, {}),
-  getFlags: (params = {}) => {
-    const q = new URLSearchParams(params).toString();
-    return get(`/tournaments/admin/flags${q ? '?' + q : ''}`);
-  },
-  reviewFlag: (flag_id, data) => patch(`/tournaments/admin/flags/${flag_id}/review`, data),
+  // Admin-facing
+  adminList: () => get('/tournaments/admin/list'),
+  adminCreate: (data) => post('/tournaments/admin/create', data),
+  adminSetStatus: (id, status) => patch(`/tournaments/admin/${id}/status?status=${status}`, {}),
+  adminStandings: (id) => get(`/tournaments/admin/${id}/standings`),
+  adminAdvanceTop3: (id) => post(`/tournaments/admin/${id}/advance-top3`, {}),
+  adminFlags: () => get('/tournaments/admin/flags'),
+  adminReviewFlag: (id, decision) => patch(`/tournaments/admin/flags/${id}/review`, { decision }),
 };
 
 export const api = {

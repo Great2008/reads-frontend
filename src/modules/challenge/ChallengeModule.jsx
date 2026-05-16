@@ -96,15 +96,19 @@ function LeaderboardView({ tournament, onBack }) {
   const [scope, setScope]       = useState('all');
   const [data, setData]         = useState([]);
   const [loading, setLoading]   = useState(true);
+  const [error, setError]       = useState('');
   const [meta, setMeta]         = useState(null);
 
   const load = async (s) => {
     setLoading(true);
+    setError('');
     try {
       const d = await api.tournament.getLeaderboard(tournament.id, s);
       setData(d.leaderboard || []);
       setMeta(d.tournament);
-    } catch (_) {}
+    } catch (e) {
+      setError(e.message || 'Failed to load leaderboard');
+    }
     finally { setLoading(false); }
   };
 
@@ -138,6 +142,8 @@ function LeaderboardView({ tournament, onBack }) {
 
       {loading ? (
         <div className="flex justify-center py-12"><Loader2 size={24} className="animate-spin text-reads-green" /></div>
+      ) : error ? (
+        <div className="text-center py-12 text-reads-red text-sm">{error}</div>
       ) : data.length === 0 ? (
         <div className="text-center py-12 text-reads-muted text-sm">No participants yet.</div>
       ) : (
