@@ -133,6 +133,9 @@ export const auth = {
   /** Preview staff invite before accepting. */
   previewStaffInvite: (token) => get(`/auth/staff/accept-invite?token=${encodeURIComponent(token)}`, false),
 
+  /** Check own partner application status. */
+  getMyApplication: () => get('/auth/my-application'),
+
   /** Accept staff invite. */
   acceptStaffInvite: (token, password) =>
     post('/auth/staff/accept-invite', { token, password }, false),

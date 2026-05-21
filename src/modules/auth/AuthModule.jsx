@@ -70,7 +70,7 @@ const AuthHeader = ({ onBack, title, subtitle }) => (
 );
 
 // ── LOGIN ──────────────────────────────────────────────────────────────────────
-const LoginView = ({ onLoginSuccess, onGoRegister, onGoForgot }) => {
+const LoginView = ({ onLoginSuccess, onGoRegister, onGoForgot, onPartnerPending }) => {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [showPw, setShowPw] = useState(false);
@@ -84,7 +84,17 @@ const LoginView = ({ onLoginSuccess, onGoRegister, onGoForgot }) => {
       await api.auth.login(email.trim().toLowerCase(), password);
       await onLoginSuccess();
     } catch (e) {
-      setError(e.message || 'Login failed. Please try again.');
+      const msg = e.message || '';
+      if (msg === 'PARTNER_PENDING') {
+        onPartnerPending && onPartnerPending(email.trim().toLowerCase());
+        return;
+      }
+      if (msg.startsWith('PARTNER_REJECTED:')) {
+        const reason = msg.replace('PARTNER_REJECTED:', '').trim();
+        setError(reason ? `Application rejected: ${reason}` : 'Your application was not approved. Contact support.');
+      } else {
+        setError(msg || 'Login failed. Please try again.');
+      }
     } finally {
       setLoading(false);
     }
@@ -530,6 +540,7 @@ export default function AuthModule({ onLoginSuccess }) {
             onLoginSuccess={onLoginSuccess}
             onGoRegister={() => setView('register')}
             onGoForgot={() => setView('forgot')}
+            onPartnerPending={(email) => { setPartnerEmail(email); setView('partner-pending'); }}
           />
         )}
         {view === 'register' && (

@@ -20,38 +20,68 @@ import ProfileModule        from './modules/profile/ProfileModule.jsx';
 import SettingsModule       from './modules/settings/SettingsModule.jsx';
 import NotificationInbox    from './modules/notifications/NotificationInbox.jsx';
 import SchoolModule         from './modules/school/SchoolModule.jsx';
-import StudentPortalModule  from './modules/school/StudentPortalModule.jsx';
-import TutorsModule         from './modules/tutors/TutorsModule.jsx';
-import ExamsModule          from './modules/exams/ExamsModule.jsx';
-import MarketplaceModule    from './modules/marketplace/MarketplaceModule.jsx';
-import AITutorModule        from './modules/ai-tutor/AITutorModule.jsx';
 import AdminModule          from './modules/admin/AdminModule.jsx';
 import PartnerModule        from './modules/partner/PartnerModule.jsx';
-import CbtModule           from './modules/partner/CbtModule.jsx';
-import TutorPortalModule   from './modules/tutors/TutorPortalModule.jsx';
-import ChallengeModule     from './modules/challenge/ChallengeModule.jsx';
+
+// ─────────────────────────────────────────────
+// Coming Soon overlay for locked Phase 2+ features
+// ─────────────────────────────────────────────
+const ComingSoon = ({ label, onBack }) => (
+  <div className="px-4 pt-10 pb-8 flex flex-col items-center text-center animate-fade-in">
+    <div className="w-20 h-20 rounded-3xl bg-reads-navy flex items-center justify-center mb-5">
+      <span className="text-3xl">🚀</span>
+    </div>
+    <h2 className="font-display font-black text-reads-navy text-2xl mb-2">{label}</h2>
+    <p className="text-reads-muted text-sm mb-1 max-w-xs">
+      This feature is coming in Phase 2 of the $READS platform.
+    </p>
+    <p className="text-reads-muted text-xs mb-8 max-w-xs">
+      Focus on learning and earning now — {label.toLowerCase()} launches soon!
+    </p>
+    <div className="w-full max-w-xs reads-card p-4 mb-6 text-left space-y-2">
+      <p className="text-reads-navy font-bold text-xs uppercase tracking-wide mb-2">Phase 2 includes</p>
+      {['Exam Registration', 'Vetted Tutors', 'Smart Challenge', 'EduContent Marketplace', 'AI Tutor', 'NFT Certificates'].map(f => (
+        <div key={f} className="flex items-center gap-2">
+          <div className="w-1.5 h-1.5 rounded-full bg-reads-green flex-shrink-0" />
+          <span className="text-reads-muted text-xs">{f}</span>
+        </div>
+      ))}
+    </div>
+    <button onClick={onBack}
+      className="reads-btn-secondary w-full max-w-xs">
+      ← Back to More
+    </button>
+  </div>
+);
 
 // ─────────────────────────────────────────────
 // "More" tile grid
 // ─────────────────────────────────────────────
 const MoreModule = ({ onNavigate }) => {
-  const tiles = [
-    { label: 'My School',   icon: School,       view: 'school',      color: '#16A34A', bg: '#f0fdf4' },
-    { label: 'My Results',  icon: Award,        view: 'student-portal', color: '#0D1F3C', bg: '#f0fdf4' },
-    { label: 'Challenge',    icon: Trophy,       view: 'challenge',     color: '#FFD700', bg: '#1a2a4a' },
-    { label: 'Tutors',      icon: GraduationCap, view: 'tutors',     color: '#6366F1', bg: '#eef2ff' },
-    { label: 'Exams',       icon: ClipboardList, view: 'exams',      color: '#0D7A6E', bg: '#f0fdfa' },
-    { label: 'Marketplace', icon: ShoppingBag,   view: 'marketplace',color: '#D4A017', bg: '#fffbeb' },
-    { label: 'AI Tutor',    icon: Sparkles,      view: 'ai-tutor',   color: '#7C3AED', bg: '#f5f3ff' },
-    { label: 'Notifications',icon: Bell,         view: 'notifications',color: '#F59E0B', bg: '#fff7ed' },
-    { label: 'Settings',    icon: SettingsIcon,  view: 'settings',   color: '#6B7280', bg: '#f9fafb' },
+  // Phase 1 live features
+  const livetiles = [
+    { label: 'My School',    icon: School,        view: 'school',       color: '#16A34A', bg: '#f0fdf4' },
+    { label: 'Notifications',icon: Bell,          view: 'notifications',color: '#F59E0B', bg: '#fff7ed' },
+    { label: 'Settings',     icon: SettingsIcon,  view: 'settings',     color: '#6B7280', bg: '#f9fafb' },
+  ];
+
+  // Phase 2+ features — locked with Coming Soon
+  const soonTiles = [
+    { label: 'Tutors',       icon: GraduationCap, view: 'tutors',      color: '#6366F1', bg: '#eef2ff' },
+    { label: 'Exams',        icon: ClipboardList, view: 'exams',       color: '#0D7A6E', bg: '#f0fdfa' },
+    { label: 'Marketplace',  icon: ShoppingBag,   view: 'marketplace', color: '#D4A017', bg: '#fffbeb' },
+    { label: 'AI Tutor',     icon: Sparkles,      view: 'ai-tutor',    color: '#7C3AED', bg: '#f5f3ff' },
+    { label: 'Challenge',    icon: Trophy,        view: 'challenge',   color: '#FFD700', bg: '#1a2a4a' },
+    { label: 'My Results',   icon: Award,         view: 'student-portal', color: '#0D1F3C', bg: '#f0fdf4' },
   ];
 
   return (
     <div className="px-4 pt-6 pb-8 animate-fade-in">
       <h2 className="font-display font-black text-reads-navy text-xl mb-5">More</h2>
-      <div className="grid grid-cols-2 gap-3">
-        {tiles.map(({ label, icon: Icon, view, color, bg }) => (
+
+      {/* Live */}
+      <div className="grid grid-cols-2 gap-3 mb-6">
+        {livetiles.map(({ label, icon: Icon, view, color, bg }) => (
           <button key={view} onClick={() => onNavigate(view)}
             className="flex flex-col items-start gap-3 p-5 reads-card active:scale-95 transition-transform text-left">
             <div className="w-12 h-12 rounded-2xl flex items-center justify-center" style={{ background: bg }}>
@@ -60,6 +90,27 @@ const MoreModule = ({ onNavigate }) => {
             <p className="text-reads-navy font-bold text-sm">{label}</p>
           </button>
         ))}
+      </div>
+
+      {/* Coming Soon */}
+      <div className="mb-3">
+        <div className="flex items-center gap-2 mb-3">
+          <div className="h-px flex-1 bg-gray-100" />
+          <span className="text-reads-muted text-xs font-bold uppercase tracking-wider px-2">Coming in Phase 2</span>
+          <div className="h-px flex-1 bg-gray-100" />
+        </div>
+        <div className="grid grid-cols-2 gap-3">
+          {soonTiles.map(({ label, icon: Icon, view, color, bg }) => (
+            <button key={view} onClick={() => onNavigate(view)}
+              className="relative flex flex-col items-start gap-3 p-5 reads-card opacity-60 text-left">
+              <div className="w-12 h-12 rounded-2xl flex items-center justify-center" style={{ background: bg }}>
+                <Icon size={24} style={{ color }} />
+              </div>
+              <p className="text-reads-navy font-bold text-sm">{label}</p>
+              <span className="absolute top-2 right-2 bg-reads-navy text-white text-[9px] font-black px-2 py-0.5 rounded-full">SOON</span>
+            </button>
+          ))}
+        </div>
       </div>
     </div>
   );
@@ -239,28 +290,23 @@ export default function App() {
 
   // ── Partner portal ──────────────────────────────────────────────────────────
   if (user.account_type === 'partner') {
-    // CBT centres get their own dedicated module; school partners get PartnerModule
-    if (user.partner_type === 'cbt_centre') {
-      return <CbtModule onLogout={handleLogout} />;
+    // School partners — Phase 1 live
+    if (!user.partner_type || user.partner_type === 'school') {
+      return <PartnerModule onLogout={handleLogout} />;
     }
-    if (user.partner_type === 'tutor') {
-      return <TutorPortalModule onLogout={handleLogout} />;
-    }
-    return <PartnerModule onLogout={handleLogout} />;
-  }
-
-  // ── AI Tutor — full-screen (no top/bottom bar) ──────────────────────────────
-  if (view === 'ai-tutor') {
+    // CBT centre & Tutor portals — Phase 2 locked
     return (
-      <div className="min-h-screen bg-gray-50 font-sans">
-        <div className="max-w-lg mx-auto h-screen flex flex-col">
-          <div className="flex items-center gap-2 px-4 py-3 bg-white border-b border-gray-100 flex-shrink-0">
-            <button onClick={() => navigate('more')} className="text-reads-muted text-sm font-semibold">← Back</button>
-          </div>
-          <div className="flex-1 overflow-hidden">
-            <AITutorModule />
-          </div>
+      <div className="min-h-screen bg-gray-50 font-sans flex flex-col items-center justify-center px-6 text-center">
+        <div className="w-20 h-20 rounded-3xl bg-reads-navy flex items-center justify-center mb-5">
+          <span className="text-3xl">🚀</span>
         </div>
+        <h2 className="font-display font-black text-reads-navy text-2xl mb-2">
+          {user.partner_type === 'cbt_centre' ? 'CBT Centre Portal' : 'Tutor Portal'}
+        </h2>
+        <p className="text-reads-muted text-sm mb-6 max-w-xs">
+          Your application is approved. This portal launches in Phase 2 — we will notify you when it is ready.
+        </p>
+        <button onClick={handleLogout} className="reads-btn-secondary">Sign Out</button>
       </div>
     );
   }
@@ -313,23 +359,25 @@ export default function App() {
         {view === 'school' && (
           <SchoolModule tokenBalance={tokenBalance} onBalanceUpdate={setTokenBalance} />
         )}
+
+        {/* Phase 2+ — Coming Soon */}
         {view === 'student-portal' && (
-          <StudentPortalModule onBack={() => navigate('more')} />
+          <ComingSoon label="My Results" onBack={() => navigate('more')} />
         )}
         {view === 'challenge' && (
-          <ChallengeModule user={user} onBack={() => navigate('more')} />
+          <ComingSoon label="Challenge" onBack={() => navigate('more')} />
         )}
-
         {view === 'tutors' && (
-          <TutorsModule tokenBalance={tokenBalance} onUpdateBalance={setTokenBalance} />
+          <ComingSoon label="Tutors" onBack={() => navigate('more')} />
         )}
-
         {view === 'exams' && (
-          <ExamsModule tokenBalance={tokenBalance} onUpdateBalance={setTokenBalance} />
+          <ComingSoon label="Exams" onBack={() => navigate('more')} />
         )}
-
         {view === 'marketplace' && (
-          <MarketplaceModule tokenBalance={tokenBalance} onUpdateBalance={setTokenBalance} />
+          <ComingSoon label="Marketplace" onBack={() => navigate('more')} />
+        )}
+        {view === 'ai-tutor' && (
+          <ComingSoon label="AI Tutor" onBack={() => navigate('more')} />
         )}
 
         {view === 'notifications' && (
