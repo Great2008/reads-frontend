@@ -179,9 +179,7 @@ function CurriculumSection({ classes }) {
   const fileRef = useRef();
   const [toast, showToast] = useToast();
 
-  const BACKEND = import.meta.env.VITE_API_URL || 'https://reads-backend-unld.onrender.com';
-
-  const loadTopics = async (cid, term) => {
+  const BACKEND = import.meta.env.VITE_API_URL || 'https://reads-backend-dwk9.onrender.com'; = async (cid, term) => {
     if (!cid) return;
     setLoading(true);
     try {
@@ -474,7 +472,7 @@ function ResultsSection({ classes }) {
   const fileRef = useRef();
   const [toast, showToast] = useToast();
 
-  const BACKEND = import.meta.env.VITE_API_URL || 'https://reads-backend-unld.onrender.com';
+  const BACKEND = import.meta.env.VITE_API_URL || 'https://reads-backend-dwk9.onrender.com';
 
   const loadResults = async () => {
     if (!selectedClass) return;
