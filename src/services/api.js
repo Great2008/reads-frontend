@@ -571,7 +571,7 @@ export const tutorPortal = {
   sendMessage: (session_id, content) => post(`/tutor/sessions/${session_id}/messages`, { content }),
 };
 const upload = async (path, formData) => {
-  const token = localStorage.getItem('reads_token') || localStorage.getItem('access_token');
+  const token = localStorage.getItem('access_token');
   const headers = {};
   if (token) headers['Authorization'] = `Bearer ${token}`;
   const res = await fetch(`${API_URL}${path}`, { method: 'POST', headers, body: formData });

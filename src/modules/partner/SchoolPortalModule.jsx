@@ -180,7 +180,6 @@ function CurriculumSection({ classes }) {
   const [toast, showToast] = useToast();
 
   const BACKEND = import.meta.env.VITE_API_URL || 'https://reads-backend-unld.onrender.com';
-  const token = typeof localStorage !== 'undefined' ? localStorage.getItem('reads_token') : null;
 
   const loadTopics = async (cid, term) => {
     if (!cid) return;
@@ -196,14 +195,20 @@ function CurriculumSection({ classes }) {
 
   const handleClassChange = (cid) => { setSelectedClass(cid); setTopics([]); setUploadResult(null); };
 
-  const handleDownloadTemplate = () => {
+  const handleDownloadTemplate = async () => {
     if (!selectedClass) return showToast('Select a class first', 'error');
-    const url = `${BACKEND}/api/school/curriculum/template/${selectedClass}`;
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = 'curriculum_template.xlsx';
-    // Auth header can't be set via anchor — open in new tab instead
-    window.open(url + `?token=${token}`, '_blank');
+    try {
+      const token = localStorage.getItem('access_token');
+      const res = await fetch(`${BACKEND}/api/school/curriculum/template/${selectedClass}`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (!res.ok) throw new Error('Download failed');
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url; a.download = 'curriculum_template.xlsx'; a.click();
+      URL.revokeObjectURL(url);
+    } catch { showToast('Failed to download template', 'error'); }
   };
 
   const handleUpload = async (e) => {
@@ -470,7 +475,6 @@ function ResultsSection({ classes }) {
   const [toast, showToast] = useToast();
 
   const BACKEND = import.meta.env.VITE_API_URL || 'https://reads-backend-unld.onrender.com';
-  const token = typeof localStorage !== 'undefined' ? localStorage.getItem('reads_token') : null;
 
   const loadResults = async () => {
     if (!selectedClass) return;
@@ -482,9 +486,20 @@ function ResultsSection({ classes }) {
     finally { setLoading(false); }
   };
 
-  const handleDownloadTemplate = () => {
+  const handleDownloadTemplate = async () => {
     if (!selectedClass) return showToast('Select a class first', 'error');
-    window.open(`${BACKEND}/api/school/results/template/${selectedClass}/${selectedTerm}?token=${token}`, '_blank');
+    try {
+      const token = localStorage.getItem('access_token');
+      const res = await fetch(`${BACKEND}/api/school/results/template/${selectedClass}/${selectedTerm}`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (!res.ok) throw new Error('Download failed');
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url; a.download = `results_template_term${selectedTerm}.xlsx`; a.click();
+      URL.revokeObjectURL(url);
+    } catch { showToast('Failed to download template', 'error'); }
   };
 
   const handleUpload = async (e) => {
