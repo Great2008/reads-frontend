@@ -200,12 +200,7 @@ export const school = {
 
   // Curriculum
   getCurriculumTemplate: (class_id) => get(`/school/curriculum/template/${class_id}`),
-  uploadCurriculum: (class_id, formData) =>
-    fetch(`${API_URL}/school/curriculum/upload/${class_id}`, {
-      method: 'POST',
-      headers: { Authorization: `Bearer ${localStorage.getItem('access_token')}` },
-      body: formData,
-    }).then((r) => r.json()),
+  uploadCurriculum: (class_id, formData) => upload(`/school/curriculum/upload/${class_id}`, formData),
   getCurriculum: (class_id, params = {}) => {
     const qs = new URLSearchParams(params).toString();
     return get(`/school/curriculum/${class_id}${qs ? `?${qs}` : ''}`);
@@ -237,12 +232,7 @@ export const school = {
   // Results
   getResultsTemplate: (class_id, term) =>
     get(`/school/results/template/${class_id}/${term}`),
-  uploadResults: (formData) =>
-    fetch(`${API_URL}/school/results/upload`, {
-      method: 'POST',
-      headers: { Authorization: `Bearer ${localStorage.getItem('access_token')}` },
-      body: formData,
-    }).then((r) => r.json()),
+  uploadResults: (formData) => upload('/school/results/upload', formData),
   submitManualResult: (data) => post('/school/results/manual', data),
   getResults: (params = {}) => {
     const qs = new URLSearchParams(params).toString();
@@ -288,12 +278,7 @@ export const exams = {
   getSlot: (registration_id) => get(`/exams/registrations/${registration_id}/slot`),
   startExam: (registration_id) => post(`/exams/${registration_id}/start`, {}),
   submitExam: (registration_id, data) => post(`/exams/${registration_id}/submit`, data),
-  uploadProof: (registration_id, formData) =>
-    fetch(`${API_URL}/exams/${registration_id}/upload-proof`, {
-      method: 'POST',
-      headers: { Authorization: `Bearer ${localStorage.getItem('access_token')}` },
-      body: formData,
-    }).then((r) => r.json()),
+  uploadProof: (registration_id, formData) => upload(`/exams/${registration_id}/upload-proof`, formData),
 };
 
 // ── Tutors ────────────────────────────────────────────────────────────────────
@@ -377,12 +362,7 @@ export const aiTutor = {
 export const profile = {
   getStats: () => get('/profile/stats'),
   getAchievements: () => get('/profile/achievements'),
-  uploadAvatar: (formData) =>
-    fetch(`${API_URL}/profile/avatar`, {
-      method: 'POST',
-      headers: { Authorization: `Bearer ${localStorage.getItem('access_token')}` },
-      body: formData,
-    }).then((r) => r.json()),
+  uploadAvatar: (formData) => upload('/profile/avatar', formData),
   deleteAccount: () => del('/profile/account'),
 };
 

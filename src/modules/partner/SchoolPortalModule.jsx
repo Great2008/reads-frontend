@@ -179,43 +179,27 @@ function CurriculumSection({ classes }) {
   const fileRef = useRef();
   const [toast, showToast] = useToast();
 
- const BACKEND =
-  import.meta.env.VITE_API_URL ||
-  'https://reads-backend-dwk9.onrender.com';
+  const API_BASE = (import.meta.env.VITE_API_URL || '') + '/api';
 
-const loadTopics = async (cid, term) => {
-  if (!cid) return;
+  const loadTopics = async (cid, term) => {
+    if (!cid) return;
+    setLoading(true);
+    try {
+      const params = {};
+      if (term) params.term = term;
+      const d = await school.getCurriculum(cid, params);
+      setTopics(d?.topics || []);
+    } catch { showToast('Failed to load curriculum', 'error'); }
+    finally { setLoading(false); }
+  };
 
-  setLoading(true);
-
-  try {
-    const params = {};
-
-    if (term) {
-      params.term = term;
-    }
-
-    const d = await school.getCurriculum(cid, params);
-
-    setTopics(d?.topics || []);
-  } catch {
-    showToast('Failed to load curriculum', 'error');
-  } finally {
-    setLoading(false);
-  }
-};
-
-  const handleClassChange = (cid) => {
-  setSelectedClass(cid);
-  setUploadResult(null);
-  loadTopics(cid, filterTerm);
-};
+  const handleClassChange = (cid) => { setSelectedClass(cid); setTopics([]); setUploadResult(null); };
 
   const handleDownloadTemplate = async () => {
     if (!selectedClass) return showToast('Select a class first', 'error');
     try {
       const token = localStorage.getItem('access_token');
-      const res = await fetch(`${BACKEND}/api/school/curriculum/template/${selectedClass}`, {
+      const res = await fetch(`${API_BASE}/school/curriculum/template/${selectedClass}`, {
         headers: { Authorization: `Bearer ${token}` },
       });
       if (!res.ok) throw new Error('Download failed');
@@ -271,7 +255,7 @@ const loadTopics = async (cid, term) => {
             <button onClick={() => fileRef.current?.click()} disabled={uploading}
               className="flex items-center justify-center gap-2 reads-btn-primary px-3 py-3 text-sm">
               {uploading ? <Loader2 size={16} className="animate-spin" /> : <Upload size={16} />}
-              Upload Filled Template
+              Upload Filled
             </button>
             <input ref={fileRef} type="file" accept=".xlsx,.xls" className="hidden" onChange={handleUpload} />
           </div>
@@ -490,7 +474,7 @@ function ResultsSection({ classes }) {
   const fileRef = useRef();
   const [toast, showToast] = useToast();
 
-  const BACKEND = import.meta.env.VITE_API_URL || 'https://reads-backend-dwk9.onrender.com';
+  const API_BASE = (import.meta.env.VITE_API_URL || '') + '/api';
 
   const loadResults = async () => {
     if (!selectedClass) return;
@@ -506,7 +490,7 @@ function ResultsSection({ classes }) {
     if (!selectedClass) return showToast('Select a class first', 'error');
     try {
       const token = localStorage.getItem('access_token');
-      const res = await fetch(`${BACKEND}/api/school/results/template/${selectedClass}/${selectedTerm}`, {
+      const res = await fetch(`${API_BASE}/school/results/template/${selectedClass}/${selectedTerm}`, {
         headers: { Authorization: `Bearer ${token}` },
       });
       if (!res.ok) throw new Error('Download failed');
