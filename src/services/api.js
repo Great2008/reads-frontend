@@ -191,7 +191,9 @@ export const school = {
   removeStaff: (staff_id) => del(`/school/staff/${staff_id}`),
 
   // Classes & Subjects
-  getClasses: () => get('/partner/school/classes'),
+  getClasses: () => get('/school/classes'),
+  createClass: (data) => post('/school/classes', data),
+  deleteClass: (class_id) => del(`/school/classes/${class_id}`),
   getSubjects: (class_id) => get(`/school/classes/${class_id}/subjects`),
   addSubject: (class_id, data) => post(`/school/classes/${class_id}/subjects`, data),
   removeSubject: (subject_id) => del(`/school/subjects/${subject_id}`),
@@ -253,7 +255,10 @@ export const school = {
     return get(`/school/fees${qs ? `?${qs}` : ''}`);
   },
   createFee: (data) => post('/school/fees', data),
-  acknowledgeFee: (fee_id) => post(`/school/fees/${fee_id}/acknowledge`, {}),
+  getFeePayments: (fee_id) => get(`/school/fees/${fee_id}/payments`),
+  recordPayment: (fee_id, data) => post(`/school/fees/${fee_id}/payments`, data),
+  // FIXED: was POST /school/fees/{fee_id}/acknowledge — backend is PATCH /school/fees/payments/{payment_id}/acknowledge
+  acknowledgeFee: (payment_id) => patch(`/school/fees/payments/${payment_id}/acknowledge`, {}),
 };
 
 // ── Content & Learning ────────────────────────────────────────────────────────
