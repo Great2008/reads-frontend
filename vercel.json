@@ -1,6 +1,10 @@
 {
   "rewrites": [
     {
+      "source": "/api/:path*",
+      "destination": "https://reads-backend-dwk9.onrender.com/api/:path*"
+    },
+    {
       "source": "/((?!assets|favicon.ico|sw.js|pwa-).*)",
       "destination": "/index.html"
     }
