@@ -213,6 +213,7 @@ function CurriculumSection({ classes }) {
 
   const handleUpload = async (e) => {
     const file = e.target.files?.[0];
+    const inputEl = e.target; // persist ref before async gap
     if (!file || !selectedClass) return;
     setUploading(true);
     setUploadResult(null);
@@ -223,8 +224,8 @@ function CurriculumSection({ classes }) {
       setUploadResult(result);
       showToast(result.message || 'Uploaded!');
       loadTopics(selectedClass, filterTerm);
-    } catch (e) { showToast(e.message || 'Upload failed', 'error'); }
-    finally { setUploading(false); e.target.value = ''; }
+    } catch (err) { showToast(err.message || 'Upload failed', 'error'); }
+    finally { setUploading(false); if (inputEl) inputEl.value = ''; }
   };
 
   const termGroups = topics.reduce((acc, t) => {
@@ -504,6 +505,7 @@ function ResultsSection({ classes }) {
 
   const handleUpload = async (e) => {
     const file = e.target.files?.[0];
+    const inputEl = e.target;
     if (!file || !selectedClass) return;
     setUploading(true);
     setUploadResult(null);
@@ -514,8 +516,8 @@ function ResultsSection({ classes }) {
       setUploadResult(r);
       showToast(r.message || 'Uploaded!');
       loadResults();
-    } catch (e) { showToast(e.message || 'Upload failed', 'error'); }
-    finally { setUploading(false); e.target.value = ''; }
+    } catch (err) { showToast(err.message || 'Upload failed', 'error'); }
+    finally { setUploading(false); if (inputEl) inputEl.value = ''; }
   };
 
   const handlePublish = async (id) => {
