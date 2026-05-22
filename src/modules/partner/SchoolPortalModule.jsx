@@ -179,19 +179,37 @@ function CurriculumSection({ classes }) {
   const fileRef = useRef();
   const [toast, showToast] = useToast();
 
-  const BACKEND = import.meta.env.VITE_API_URL || 'https://reads-backend-dwk9.onrender.com'; async (cid, term) => {
-    if (!cid) return;
-    setLoading(true);
-    try {
-      const params = {};
-      if (term) params.term = term;
-      const d = await school.getCurriculum(cid, params);
-      setTopics(d?.topics || []);
-    } catch { showToast('Failed to load curriculum', 'error'); }
-    finally { setLoading(false); }
-  };
+ const BACKEND =
+  import.meta.env.VITE_API_URL ||
+  'https://reads-backend-dwk9.onrender.com';
 
-  const handleClassChange = (cid) => { setSelectedClass(cid); setTopics([]); setUploadResult(null); };
+const loadTopics = async (cid, term) => {
+  if (!cid) return;
+
+  setLoading(true);
+
+  try {
+    const params = {};
+
+    if (term) {
+      params.term = term;
+    }
+
+    const d = await school.getCurriculum(cid, params);
+
+    setTopics(d?.topics || []);
+  } catch {
+    showToast('Failed to load curriculum', 'error');
+  } finally {
+    setLoading(false);
+  }
+};
+
+  const handleClassChange = (cid) => {
+  setSelectedClass(cid);
+  setUploadResult(null);
+  loadTopics(cid, filterTerm);
+};
 
   const handleDownloadTemplate = async () => {
     if (!selectedClass) return showToast('Select a class first', 'error');
@@ -253,7 +271,7 @@ function CurriculumSection({ classes }) {
             <button onClick={() => fileRef.current?.click()} disabled={uploading}
               className="flex items-center justify-center gap-2 reads-btn-primary px-3 py-3 text-sm">
               {uploading ? <Loader2 size={16} className="animate-spin" /> : <Upload size={16} />}
-              Upload Filled
+              Upload Filled Template
             </button>
             <input ref={fileRef} type="file" accept=".xlsx,.xls" className="hidden" onChange={handleUpload} />
           </div>
