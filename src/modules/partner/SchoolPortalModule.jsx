@@ -47,8 +47,8 @@ const Select = ({ value, onChange, options, placeholder }) => (
 // ── Shared API wrapper that adds /school prefix ───────────────────────────────
 const school = {
   getClasses: () => api.partner.getClasses(),
-  getSubjects: (class_id) => api.get(`/school/subjects${class_id ? `?class_id=${class_id}` : ''}`),
-  addSubject: (data) => api.post('/school/subjects', data),
+  getSubjects: (class_id) => api.get(`/school/classes/${class_id}/subjects`),
+  addSubject: (data) => api.post(`/school/classes/${data.class_id}/subjects`, data),
   deleteSubject: (id) => api.del(`/school/subjects/${id}`),
   downloadCurrTemplate: (class_id) => `/school/curriculum/template/${class_id}`,
   uploadCurriculum: (class_id, formData) => api.upload(`/school/curriculum/upload/${class_id}`, formData),
