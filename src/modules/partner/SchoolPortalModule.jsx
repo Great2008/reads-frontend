@@ -169,17 +169,185 @@ function SubjectsSection({ classes }) {
 // ═══════════════════════════════════════════════════════════════════════════
 // CURRICULUM SECTION
 // ═══════════════════════════════════════════════════════════════════════════
+const TERM_OPTS = [
+  { value: '1', label: 'Term 1' },
+  { value: '2', label: 'Term 2' },
+  { value: '3', label: 'Term 3' },
+];
+
+// ── Manual row form ──────────────────────────────────────────────────────────
+function ManualEntryMethod({ classId, subjects, onSuccess, showToast }) {
+  const empty = { subject_id: '', term: '1', week: '', topic: '', subtopic: '', objectives: '' };
+  const [form, setForm] = useState(empty);
+  const [saving, setSaving] = useState(false);
+  const f = (k) => (v) => setForm(p => ({ ...p, [k]: typeof v === 'string' ? v : v.target.value }));
+
+  const handleSave = async () => {
+    if (!form.subject_id || !form.term || !form.topic.trim())
+      return showToast('Subject, term and topic are required', 'error');
+    setSaving(true);
+    try {
+      await api.post('/school/curriculum/manual', {
+        class_id: classId,
+        subject_id: form.subject_id,
+        term: parseInt(form.term),
+        week: form.week ? parseInt(form.week) : null,
+        topic: form.topic.trim(),
+        subtopic: form.subtopic.trim() || null,
+        objectives: form.objectives.trim() || null,
+      });
+      showToast('Topic saved!');
+      setForm(empty);
+      onSuccess();
+    } catch (err) { showToast(err.message || 'Failed to save', 'error'); }
+    finally { setSaving(false); }
+  };
+
+  return (
+    <div className="space-y-3">
+      <Select value={form.subject_id} onChange={f('subject_id')}
+        placeholder="— Subject —"
+        options={subjects.map(s => ({ value: s.id, label: s.name }))} />
+      <div className="grid grid-cols-2 gap-2">
+        <Select value={form.term} onChange={f('term')} options={TERM_OPTS} />
+        <input className="reads-input" placeholder="Week (optional)" type="number"
+          value={form.week} onChange={f('week')} />
+      </div>
+      <input className="reads-input" placeholder="Topic *" value={form.topic} onChange={f('topic')} />
+      <input className="reads-input" placeholder="Subtopic (optional)" value={form.subtopic} onChange={f('subtopic')} />
+      <textarea className="reads-input min-h-[72px] resize-none" placeholder="Objectives (optional)"
+        value={form.objectives} onChange={f('objectives')} />
+      <button onClick={handleSave} disabled={saving}
+        className="reads-btn-primary w-full flex items-center justify-center gap-2">
+        {saving ? <Loader2 size={16} className="animate-spin" /> : <Plus size={16} />} Add Topic
+      </button>
+    </div>
+  );
+}
+
+// ── Paste method ─────────────────────────────────────────────────────────────
+function PasteMethod({ classId, subjects, onSuccess, showToast }) {
+  const [subjectId, setSubjectId] = useState('');
+  const [term, setTerm] = useState('1');
+  const [text, setText] = useState('');
+  const [saving, setSaving] = useState(false);
+  const [result, setResult] = useState(null);
+
+  const placeholder =
+    `Paste rows — one topic per line.\nFormat: week  topic  subtopic  objectives\n(Tab-separated, like copying from Excel/Sheets)\n\nExample:\n1\tMeasurement\tLength and Mass\tStudents can measure...\n2\tFractions\tProper Fractions\t`;
+
+  const handleSubmit = async () => {
+    if (!subjectId || !term || !text.trim())
+      return showToast('Select subject, term and paste your data', 'error');
+    setSaving(true); setResult(null);
+    try {
+      const rows = text.trim().split('\n').filter(Boolean).map(line => {
+        const cols = line.split('\t');
+        const [weekRaw, topic, subtopic, objectives] = cols;
+        const week = parseInt(weekRaw);
+        return { week: isNaN(week) ? null : week, topic: (topic || weekRaw || '').trim(), subtopic: (subtopic || '').trim() || null, objectives: (objectives || '').trim() || null };
+      }).filter(r => r.topic);
+      if (!rows.length) return showToast('No valid rows found', 'error');
+      const res = await api.post('/school/curriculum/paste', {
+        class_id: classId, subject_id: subjectId, term: parseInt(term), rows,
+      });
+      setResult(res);
+      showToast(res.message || 'Saved!');
+      setText('');
+      onSuccess();
+    } catch (err) { showToast(err.message || 'Failed', 'error'); }
+    finally { setSaving(false); }
+  };
+
+  return (
+    <div className="space-y-3">
+      <p className="text-reads-muted text-xs">Copy rows from Excel or Google Sheets and paste below. One row = one topic.</p>
+      <Select value={subjectId} onChange={setSubjectId}
+        placeholder="— Subject —"
+        options={subjects.map(s => ({ value: s.id, label: s.name }))} />
+      <Select value={term} onChange={setTerm} options={TERM_OPTS} />
+      <textarea
+        className="reads-input min-h-[160px] resize-none font-mono text-xs"
+        placeholder={placeholder}
+        value={text}
+        onChange={e => setText(e.target.value)}
+      />
+      {result && (
+        <div className={`reads-card px-4 py-3 ${result.errors?.length ? 'border-l-4 border-amber-400' : 'border-l-4 border-reads-green'}`}>
+          <p className="font-bold text-reads-navy text-sm">{result.message}</p>
+          {result.errors?.slice(0, 5).map((err, i) => <p key={i} className="text-xs text-amber-600 mt-1">⚠ {err}</p>)}
+        </div>
+      )}
+      <button onClick={handleSubmit} disabled={saving}
+        className="reads-btn-primary w-full flex items-center justify-center gap-2">
+        {saving ? <Loader2 size={16} className="animate-spin" /> : <Upload size={16} />} Save Topics
+      </button>
+    </div>
+  );
+}
+
+// ── Google Sheets method ──────────────────────────────────────────────────────
+function SheetsMethod({ classId, subjects, onSuccess, showToast }) {
+  const [url, setUrl] = useState('');
+  const [subjectId, setSubjectId] = useState('');
+  const [term, setTerm] = useState('1');
+  const [saving, setSaving] = useState(false);
+  const [result, setResult] = useState(null);
+
+  const handleFetch = async () => {
+    if (!url.trim() || !subjectId || !term)
+      return showToast('Paste a Sheets URL, select subject and term', 'error');
+    if (!url.includes('docs.google.com/spreadsheets'))
+      return showToast('Please paste a Google Sheets URL', 'error');
+    setSaving(true); setResult(null);
+    try {
+      const res = await api.post('/school/curriculum/sheets', {
+        class_id: classId, subject_id: subjectId, term: parseInt(term), url: url.trim(),
+      });
+      setResult(res);
+      showToast(res.message || 'Imported!');
+      setUrl('');
+      onSuccess();
+    } catch (err) { showToast(err.message || 'Failed to import', 'error'); }
+    finally { setSaving(false); }
+  };
+
+  return (
+    <div className="space-y-3">
+      <div className="reads-card px-4 py-3 bg-blue-50 border-blue-200">
+        <p className="text-xs font-bold text-blue-700 mb-1">How to share your sheet</p>
+        <p className="text-xs text-blue-600">In Google Sheets: <span className="font-bold">File → Share → Anyone with the link → Viewer</span>, then copy the link.</p>
+        <p className="text-xs text-blue-600 mt-1">Columns: <span className="font-mono">Week | Topic | Subtopic | Objectives</span> (row 1 = header, ignored)</p>
+      </div>
+      <Select value={subjectId} onChange={setSubjectId}
+        placeholder="— Subject —"
+        options={subjects.map(s => ({ value: s.id, label: s.name }))} />
+      <Select value={term} onChange={setTerm} options={TERM_OPTS} />
+      <input className="reads-input" placeholder="Paste Google Sheets URL"
+        value={url} onChange={e => setUrl(e.target.value)} />
+      {result && (
+        <div className={`reads-card px-4 py-3 ${result.errors?.length ? 'border-l-4 border-amber-400' : 'border-l-4 border-reads-green'}`}>
+          <p className="font-bold text-reads-navy text-sm">{result.message}</p>
+          {result.errors?.slice(0, 5).map((e, i) => <p key={i} className="text-xs text-amber-600 mt-1">⚠ {e}</p>)}
+        </div>
+      )}
+      <button onClick={handleFetch} disabled={saving}
+        className="reads-btn-primary w-full flex items-center justify-center gap-2">
+        {saving ? <Loader2 size={16} className="animate-spin" /> : <Download size={16} />} Import from Sheets
+      </button>
+    </div>
+  );
+}
+
+// ── Main CurriculumSection ────────────────────────────────────────────────────
 function CurriculumSection({ classes }) {
   const [selectedClass, setSelectedClass] = useState('');
+  const [method, setMethod] = useState(null); // 'manual' | 'paste' | 'sheets'
   const [filterTerm, setFilterTerm] = useState('');
   const [topics, setTopics] = useState([]);
+  const [subjects, setSubjects] = useState([]);
   const [loading, setLoading] = useState(false);
-  const [uploading, setUploading] = useState(false);
-  const [uploadResult, setUploadResult] = useState(null);
-  const fileRef = useRef();
   const [toast, showToast] = useToast();
-
-  const API_BASE = (import.meta.env.VITE_API_URL || '') + '/api';
 
   const loadTopics = async (cid, term) => {
     if (!cid) return;
@@ -193,40 +361,19 @@ function CurriculumSection({ classes }) {
     finally { setLoading(false); }
   };
 
-  const handleClassChange = (cid) => { setSelectedClass(cid); setTopics([]); setUploadResult(null); };
-
-  const handleDownloadTemplate = async () => {
-    if (!selectedClass) return showToast('Select a class first', 'error');
+  const loadSubjects = async (cid) => {
     try {
-      const token = localStorage.getItem('access_token');
-      const res = await fetch(`${API_BASE}/school/curriculum/template/${selectedClass}`, {
-        headers: { Authorization: `Bearer ${token}` },
-      });
-      if (!res.ok) throw new Error('Download failed');
-      const blob = await res.blob();
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url; a.download = 'curriculum_template.xlsx'; a.click();
-      URL.revokeObjectURL(url);
-    } catch { showToast('Failed to download template', 'error'); }
+      const d = await api.get(`/school/classes/${cid}/subjects`);
+      setSubjects(d?.subjects || []);
+    } catch { setSubjects([]); }
   };
 
-  const handleUpload = async (e) => {
-    const file = e.target.files?.[0];
-    const inputEl = e.target; // persist ref before async gap
-    if (!file || !selectedClass) return;
-    setUploading(true);
-    setUploadResult(null);
-    try {
-      const formData = new FormData();
-      formData.append('file', file);
-      const result = await school.uploadCurriculum(selectedClass, formData);
-      setUploadResult(result);
-      showToast(result.message || 'Uploaded!');
-      loadTopics(selectedClass, filterTerm);
-    } catch (err) { showToast(err.message || 'Upload failed', 'error'); }
-    finally { setUploading(false); if (inputEl) inputEl.value = ''; }
+  const handleClassChange = (cid) => {
+    setSelectedClass(cid); setTopics([]); setMethod(null);
+    if (cid) { loadSubjects(cid); loadTopics(cid, ''); }
   };
+
+  const onSuccess = () => loadTopics(selectedClass, filterTerm);
 
   const termGroups = topics.reduce((acc, t) => {
     const key = `Term ${t.term}`;
@@ -235,11 +382,17 @@ function CurriculumSection({ classes }) {
     return acc;
   }, {});
 
+  const methodOptions = [
+    { key: 'manual', icon: Plus,         label: 'Add Manually',    desc: 'Type topics one by one' },
+    { key: 'paste',  icon: FileSpreadsheet, label: 'Paste from Excel', desc: 'Copy-paste rows from a spreadsheet' },
+    { key: 'sheets', icon: BookMarked,   label: 'Google Sheets',   desc: 'Import from a shared Sheets link' },
+  ];
+
   return (
     <div className="px-4 pt-2 pb-4 animate-fade-in space-y-4">
       <div>
         <h2 className="font-black text-reads-navy text-lg">Curriculum</h2>
-        <p className="text-reads-muted text-xs">Download template → fill → upload. One sheet per subject.</p>
+        <p className="text-reads-muted text-xs">Add topics for each class and subject.</p>
       </div>
 
       <Select value={selectedClass} onChange={handleClassChange}
@@ -248,43 +401,57 @@ function CurriculumSection({ classes }) {
 
       {selectedClass && (
         <>
-          <div className="grid grid-cols-2 gap-2">
-            <button onClick={handleDownloadTemplate}
-              className="flex items-center justify-center gap-2 reads-card px-3 py-3 text-sm font-bold text-reads-navy hover:bg-gray-50 transition-colors">
-              <Download size={16} className="text-reads-green" /> Download Template
-            </button>
-            <button onClick={() => fileRef.current?.click()} disabled={uploading}
-              className="flex items-center justify-center gap-2 reads-btn-primary px-3 py-3 text-sm">
-              {uploading ? <Loader2 size={16} className="animate-spin" /> : <Upload size={16} />}
-              Upload Filled
-            </button>
-            <input ref={fileRef} type="file" accept=".xlsx,.xls" className="hidden" onChange={handleUpload} />
-          </div>
-
-          {uploadResult && (
-            <div className={`reads-card px-4 py-3 ${uploadResult.errors?.length ? 'border-l-4 border-amber-400' : 'border-l-4 border-reads-green'}`}>
-              <p className="font-bold text-reads-navy text-sm">{uploadResult.message}</p>
-              {uploadResult.errors?.slice(0, 5).map((err, i) => (
-                <p key={i} className="text-xs text-amber-600 mt-1">⚠ {err}</p>
+          {/* Method picker */}
+          {!method ? (
+            <div className="space-y-2">
+              <p className="text-reads-muted text-xs font-bold uppercase tracking-wide">How do you want to add topics?</p>
+              {methodOptions.map(({ key, icon: Icon, label, desc }) => (
+                <button key={key} onClick={() => setMethod(key)}
+                  className="w-full reads-card px-4 py-3 flex items-center gap-3 text-left active:scale-95 transition-transform">
+                  <div className="w-10 h-10 rounded-2xl bg-reads-green flex items-center justify-center flex-shrink-0">
+                    <Icon size={18} className="text-white" />
+                  </div>
+                  <div>
+                    <p className="font-bold text-reads-navy text-sm">{label}</p>
+                    <p className="text-reads-muted text-xs">{desc}</p>
+                  </div>
+                </button>
               ))}
+            </div>
+          ) : (
+            <div className="space-y-3">
+              <button onClick={() => setMethod(null)}
+                className="text-reads-muted text-xs font-bold flex items-center gap-1">
+                ← Change method
+              </button>
+              <div className="reads-card px-4 py-4">
+                {method === 'manual' && (
+                  <ManualEntryMethod classId={selectedClass} subjects={subjects} onSuccess={onSuccess} showToast={showToast} />
+                )}
+                {method === 'paste' && (
+                  <PasteMethod classId={selectedClass} subjects={subjects} onSuccess={onSuccess} showToast={showToast} />
+                )}
+                {method === 'sheets' && (
+                  <SheetsMethod classId={selectedClass} subjects={subjects} onSuccess={onSuccess} showToast={showToast} />
+                )}
+              </div>
             </div>
           )}
 
-          <div className="flex items-center gap-2">
+          {/* Topic list */}
+          <div className="flex items-center gap-2 pt-2">
+            <p className="text-reads-navy font-black text-xs uppercase tracking-wide flex-1">Topics</p>
             <Select value={filterTerm} onChange={t => { setFilterTerm(t); loadTopics(selectedClass, t); }}
               placeholder="All Terms"
-              options={[{ value: '1', label: 'Term 1' }, { value: '2', label: 'Term 2' }, { value: '3', label: 'Term 3' }]} />
+              options={TERM_OPTS} />
             <button onClick={() => loadTopics(selectedClass, filterTerm)}
-              className="reads-card px-3 py-2.5 text-xs font-bold text-reads-navy">
-              View
-            </button>
+              className="reads-card px-3 py-2.5 text-xs font-bold text-reads-navy">↻</button>
           </div>
 
           {loading ? (
             <div className="flex justify-center py-8"><Loader2 size={24} className="animate-spin text-reads-green" /></div>
           ) : topics.length === 0 ? (
-            <EmptyCard icon={Layers} title="No curriculum yet"
-              desc="Download the template, fill in your topics, then upload." />
+            <EmptyCard icon={Layers} title="No topics yet" desc="Choose a method above to add your first topic." />
           ) : (
             Object.entries(termGroups).map(([term, items]) => (
               <div key={term}>
@@ -294,6 +461,7 @@ function CurriculumSection({ classes }) {
                     <div key={t.id} className="reads-card px-4 py-3">
                       <div className="flex items-center gap-2 mb-1">
                         {t.week && <span className="text-[10px] font-bold bg-reads-green-bg text-reads-green px-2 py-0.5 rounded-full">Wk {t.week}</span>}
+                        <span className="text-[10px] text-reads-muted">{t.subject_name}</span>
                       </div>
                       <p className="font-semibold text-reads-navy text-sm">{t.topic}</p>
                       {t.subtopic && <p className="text-reads-muted text-xs mt-0.5">{t.subtopic}</p>}
