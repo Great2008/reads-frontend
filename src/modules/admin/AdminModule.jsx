@@ -746,7 +746,8 @@ function SchoolCurriculumSection() {
   const [cLoading, setCLoading] = useState(false);
   const [expanded, setExpanded] = useState({});
   const [deleting, setDeleting] = useState(null);
-  const [toast, showToast] = useToast ? useToast() : [null, () => {}];
+  const [toastMsg, setToastMsg] = useState(null);
+  const showToast = (msg) => { setToastMsg(msg); setTimeout(() => setToastMsg(null), 3000); };
 
   useEffect(() => {
     api.admin.getSchools()
@@ -776,7 +777,8 @@ function SchoolCurriculumSection() {
     try {
       await api.del(`/admin/curriculum/${topicId}`);
       setTopics(prev => prev.filter(t => t.id !== topicId));
-    } catch (e) { alert(e.message || 'Failed to delete'); }
+      showToast('Topic deleted');
+    } catch (e) { showToast(e.message || 'Failed to delete'); }
     finally { setDeleting(null); }
   };
 
@@ -866,6 +868,11 @@ function SchoolCurriculumSection() {
               )}
             </div>
           ))}
+        </div>
+      )}
+      {toastMsg && (
+        <div className="fixed bottom-20 left-1/2 -translate-x-1/2 z-50 px-5 py-3 rounded-2xl shadow-xl text-sm font-semibold bg-reads-navy text-white animate-fade-in">
+          {toastMsg}
         </div>
       )}
     </div>
