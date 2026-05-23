@@ -101,25 +101,44 @@ function JoinSchoolFlow({ onJoined, onClose }) {
 // ── Student View — My School ───────────────────────────────────────────────────
 function MySchool({ tokenBalance, onBalanceUpdate }) {
   const [school, setSchool] = useState(null);
-  const [students, setStudents] = useState([]);
+  const [fees, setFees] = useState([]);
   const [loading, setLoading] = useState(true);
   const [showJoin, setShowJoin] = useState(false);
   const [toast, setToast] = useState(null);
+  const [payingId, setPayingId] = useState(null);
 
   const showToast = (msg, type = 'success') => {
-    setToast({ msg, type }); setTimeout(() => setToast(null), 3000);
+    setToast({ msg, type }); setTimeout(() => setToast(null), 3500);
   };
 
-  useEffect(() => {
-    const load = async () => {
-      try {
-        const data = await api.school.getProfile();
-        setSchool(data);
-      } catch (_) { setSchool(null); }
-      setLoading(false);
-    };
-    load();
-  }, []);
+  const load = async () => {
+    setLoading(true);
+    try {
+      const data = await api.school.getProfile();
+      setSchool(data);
+      // Load fees if enrolled
+      const feesData = await api.students.getMyFees().catch(() => ({ fees: [] }));
+      setFees(feesData?.fees || []);
+    } catch (_) { setSchool(null); }
+    setLoading(false);
+  };
+
+  useEffect(() => { load(); }, []);
+
+  const handlePay = async (feeId) => {
+    setPayingId(feeId);
+    try {
+      await api.students.payFee(feeId);
+      showToast('Fee paid successfully!');
+      const feesData = await api.students.getMyFees();
+      setFees(feesData?.fees || []);
+      if (onBalanceUpdate) {
+        const bal = await api.wallet.getBalance();
+        onBalanceUpdate(bal);
+      }
+    } catch (err) { showToast(err.message || 'Payment failed', 'error'); }
+    finally { setPayingId(null); }
+  };
 
   if (loading) return <LoadingOverlay message="Loading school…" />;
 
@@ -138,7 +157,7 @@ function MySchool({ tokenBalance, onBalanceUpdate }) {
         />
         {showJoin && (
           <JoinSchoolFlow
-            onJoined={() => { setShowJoin(false); showToast('Enrolled successfully!'); window.location.reload(); }}
+            onJoined={() => { setShowJoin(false); showToast('Enrolled successfully!'); load(); }}
             onClose={() => setShowJoin(false)}
           />
         )}
@@ -147,50 +166,95 @@ function MySchool({ tokenBalance, onBalanceUpdate }) {
     );
   }
 
+  const unpaidFees = fees.filter(f => f.status !== 'acknowledged');
+  const paidFees = fees.filter(f => f.status === 'acknowledged');
+
   return (
-    <div className="px-4 pt-4 pb-6 animate-fade-in">
+    <div className="px-4 pt-4 pb-8 animate-fade-in space-y-4">
       {/* School card */}
-      <div className="reads-card p-5 mb-5">
+      <div className="reads-card p-5">
         <div className="flex items-start gap-4">
           <div className="w-14 h-14 bg-reads-navy rounded-2xl flex items-center justify-center flex-shrink-0">
             <School size={28} className="text-reads-gold" />
           </div>
           <div className="flex-1">
             <h2 className="font-display font-black text-reads-navy text-lg leading-tight">{school.name}</h2>
-            <p className="text-reads-muted text-sm">{school.address}</p>
-            <div className="flex items-center gap-2 mt-2">
+            {school.address && <p className="text-reads-muted text-sm">{school.address}</p>}
+            <div className="flex items-center gap-2 mt-2 flex-wrap">
               <Badge label={school.school_code} variant="gray" />
-              <Badge label={school.status === 'active' ? 'Active' : 'Suspended'} variant={school.status === 'active' ? 'green' : 'red'} />
+              <Badge label={school.status === 'active' ? 'Active' : 'Suspended'}
+                variant={school.status === 'active' ? 'green' : 'red'} />
             </div>
           </div>
         </div>
       </div>
 
-      {/* Quick info */}
-      <div className="grid grid-cols-2 gap-3 mb-5">
-        {[
-          { label: 'Your Class', value: school.current_class || '—', icon: GraduationCap },
-          { label: 'Track', value: school.track_type || '—', icon: BookOpen },
-        ].map(({ label, value, icon: Icon }) => (
-          <div key={label} className="reads-card p-4">
-            <Icon size={18} className="text-reads-green mb-2" />
-            <p className="font-black text-reads-navy text-sm">{value}</p>
-            <p className="text-reads-muted text-xs">{label}</p>
-          </div>
-        ))}
+      {/* Class & Session info */}
+      <div className="grid grid-cols-2 gap-3">
+        <div className="reads-card p-4">
+          <GraduationCap size={18} className="text-reads-green mb-2" />
+          <p className="font-black text-reads-navy text-sm">{school.current_class || '—'}</p>
+          <p className="text-reads-muted text-xs">Your Class</p>
+        </div>
+        <div className="reads-card p-4">
+          <BookOpen size={18} className="text-reads-green mb-2" />
+          <p className="font-black text-reads-navy text-sm">{school.current_session || '—'}</p>
+          <p className="text-reads-muted text-xs">Current Session</p>
+        </div>
       </div>
+
+      {/* Fees */}
+      {fees.length > 0 && (
+        <div>
+          <p className="font-black text-reads-navy text-xs uppercase tracking-wide mb-2">School Fees</p>
+          <div className="space-y-2">
+            {unpaidFees.map(f => (
+              <div key={f.id} className="reads-card px-4 py-3 border-l-4 border-amber-400">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="font-bold text-reads-navy text-sm">Term {f.term} — {f.class_name}</p>
+                    <p className="text-reads-muted text-xs">{f.amount} $READS{f.due_date ? ` · Due ${new Date(f.due_date).toLocaleDateString()}` : ''}</p>
+                  </div>
+                  <button
+                    onClick={() => handlePay(f.id)}
+                    disabled={payingId === f.id}
+                    className="reads-btn-primary px-3 py-1.5 text-xs flex items-center gap-1">
+                    {payingId === f.id ? <Loader2 size={12} className="animate-spin" /> : null}
+                    Pay
+                  </button>
+                </div>
+              </div>
+            ))}
+            {paidFees.map(f => (
+              <div key={f.id} className="reads-card px-4 py-3 border-l-4 border-reads-green opacity-70">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="font-bold text-reads-navy text-sm">Term {f.term} — {f.class_name}</p>
+                    <p className="text-reads-muted text-xs">{f.amount} $READS</p>
+                  </div>
+                  <div className="flex items-center gap-1 text-reads-green text-xs font-bold">
+                    <CheckCircle size={14} /> Paid
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
 
       {/* Leave school */}
       <div className="reads-card px-4 py-3">
         <button
           onClick={async () => {
-            if (!confirm('Leave this school?')) return;
-            await api.students.unenroll();
-            showToast('Left school successfully.');
-            setSchool(null);
+            if (!confirm('Leave this school? You will lose access to school lessons and results.')) return;
+            try {
+              await api.students.unenroll();
+              showToast('Left school successfully.');
+              setSchool(null);
+              setFees([]);
+            } catch (err) { showToast(err.message || 'Failed to leave school', 'error'); }
           }}
-          className="text-reads-red text-sm font-semibold py-1"
-        >
+          className="text-reads-red text-sm font-semibold py-1">
           Leave School
         </button>
       </div>

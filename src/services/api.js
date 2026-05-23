@@ -32,7 +32,9 @@ const handleError = async (res, action) => {
       ) {
         throw new Error(detail);
       }
-      throw new Error(json.detail || 'Session expired. Please log in again.');
+      // Fire global event so App.jsx can show "Session expired" and redirect
+      window.dispatchEvent(new CustomEvent('reads:session-expired'));
+      throw new Error('SESSION_EXPIRED');
     } catch (e) {
       throw e;
     }

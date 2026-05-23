@@ -231,7 +231,9 @@ export default function App() {
     setView('welcome');
   };
 
-  // Session restore
+  const [globalToast, setGlobalToast] = useState(null);
+
+  // Session restore + session-expired listener
   useEffect(() => {
     const restore = async () => {
       const token = localStorage.getItem('access_token');
@@ -243,6 +245,30 @@ export default function App() {
       setIsLoading(false);
     };
     restore();
+
+    const onExpired = () => {
+      setUser(null);
+      setTokenBalance(0);
+      setUnreadCount(0);
+      setView('auth');
+      // Small delay so AuthModule mounts before showing the toast
+      setTimeout(() => {
+        window.dispatchEvent(new CustomEvent('reads:show-toast', {
+          detail: { msg: 'Session expired. Please log in again.', type: 'error' }
+        }));
+      }, 100);
+    };
+    window.addEventListener('reads:session-expired', onExpired);
+
+    const onToast = (e) => {
+      setGlobalToast(e.detail);
+      setTimeout(() => setGlobalToast(null), 4000);
+    };
+    window.addEventListener('reads:show-toast', onToast);
+    return () => {
+      window.removeEventListener('reads:session-expired', onExpired);
+      window.removeEventListener('reads:show-toast', onToast);
+    };
   }, []);
 
   // Content protection — disable right-click, text selection, copy, screenshot keys
@@ -285,7 +311,17 @@ export default function App() {
   // ── Unauthenticated ─────────────────────────────────────────────────────────
   if (!user) {
     if (view === 'welcome') return <WelcomePage onGetStarted={() => setView('login')} />;
-    return <AuthModule onLoginSuccess={handleLoginSuccess} />;
+    return (
+      <>
+        <AuthModule onLoginSuccess={handleLoginSuccess} />
+        {globalToast && (
+          <div className={`fixed bottom-6 left-1/2 -translate-x-1/2 z-50 px-5 py-3 rounded-2xl shadow-xl text-sm font-semibold animate-fade-in
+            ${globalToast.type === 'error' ? 'bg-red-50 text-red-600 border border-red-200' : 'bg-green-50 text-reads-green border border-green-200'}`}>
+            {globalToast.msg}
+          </div>
+        )}
+      </>
+    );
   }
 
   // ── Partner portal ──────────────────────────────────────────────────────────
