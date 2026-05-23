@@ -738,10 +738,15 @@ function QuizSection() {
 function SchoolCurriculumSection() {
   const [schools, setSchools] = useState([]);
   const [selectedSchool, setSelectedSchool] = useState(null);
-  const [curriculum, setCurriculum] = useState([]);
+  const [topics, setTopics] = useState([]);
+  const [classes, setClasses] = useState([]);
+  const [filterClass, setFilterClass] = useState('');
+  const [filterTerm, setFilterTerm] = useState('');
   const [loading, setLoading] = useState(true);
   const [cLoading, setCLoading] = useState(false);
   const [expanded, setExpanded] = useState({});
+  const [deleting, setDeleting] = useState(null);
+  const [toast, showToast] = useToast ? useToast() : [null, () => {}];
 
   useEffect(() => {
     api.admin.getSchools()
@@ -750,34 +755,78 @@ function SchoolCurriculumSection() {
       .finally(() => setLoading(false));
   }, []);
 
-  const loadCurriculum = async (school) => {
+  const loadCurriculum = async (school, classId = '', term = '') => {
     setSelectedSchool(school);
     setCLoading(true);
     try {
-      const d = await api.admin.getSchoolCurriculum(school.id);
-      setCurriculum(d?.curriculum || []);
+      const params = new URLSearchParams();
+      if (classId) params.append('class_id', classId);
+      if (term) params.append('term', term);
+      const qs = params.toString();
+      const d = await api.get(`/admin/schools/${school.id}/curriculum${qs ? `?${qs}` : ''}`);
+      setTopics(d?.topics || []);
+      setClasses(d?.classes || []);
     } catch { }
     finally { setCLoading(false); }
   };
 
+  const handleDelete = async (topicId) => {
+    if (!confirm('Delete this topic?')) return;
+    setDeleting(topicId);
+    try {
+      await api.del(`/admin/curriculum/${topicId}`);
+      setTopics(prev => prev.filter(t => t.id !== topicId));
+    } catch (e) { alert(e.message || 'Failed to delete'); }
+    finally { setDeleting(null); }
+  };
+
   const toggle = (key) => setExpanded(e => ({ ...e, [key]: !e[key] }));
+
+  // Group flat topics → class → subject → topics
+  const grouped = topics.reduce((acc, t) => {
+    const cKey = t.class_id;
+    if (!acc[cKey]) acc[cKey] = { class_id: cKey, class_name: t.class_name, subjects: {} };
+    const sKey = t.subject_id;
+    if (!acc[cKey].subjects[sKey]) acc[cKey].subjects[sKey] = { id: sKey, name: t.subject_name, topics: [] };
+    acc[cKey].subjects[sKey].topics.push(t);
+    return acc;
+  }, {});
+  const groupedList = Object.values(grouped).map(c => ({ ...c, subjects: Object.values(c.subjects) }));
 
   if (loading) return <LoadingOverlay />;
 
   if (selectedSchool) return (
     <div className="px-4 pt-2 pb-4 animate-fade-in">
-      <button onClick={() => setSelectedSchool(null)} className="flex items-center gap-1 text-reads-muted text-sm mb-3">← Back</button>
+      <button onClick={() => { setSelectedSchool(null); setTopics([]); setFilterClass(''); setFilterTerm(''); }}
+        className="flex items-center gap-1 text-reads-muted text-sm mb-3">← Back</button>
       <SectionHeader title={selectedSchool.name} subtitle="Curriculum" />
-      {cLoading ? <LoadingOverlay /> : curriculum.length === 0 ? (
-        <EmptyState icon={FileText} title="No curriculum uploaded" description="This school hasn't uploaded curriculum yet." />
+
+      {/* Filters */}
+      <div className="flex gap-2 mb-3">
+        <select className="reads-input flex-1 text-sm"
+          value={filterClass} onChange={e => { setFilterClass(e.target.value); loadCurriculum(selectedSchool, e.target.value, filterTerm); }}>
+          <option value="">All Classes</option>
+          {classes.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+        </select>
+        <select className="reads-input w-28 text-sm"
+          value={filterTerm} onChange={e => { setFilterTerm(e.target.value); loadCurriculum(selectedSchool, filterClass, e.target.value); }}>
+          <option value="">All Terms</option>
+          <option value="1">Term 1</option>
+          <option value="2">Term 2</option>
+          <option value="3">Term 3</option>
+        </select>
+      </div>
+
+      {cLoading ? <LoadingOverlay /> : groupedList.length === 0 ? (
+        <EmptyState icon={FileText} title="No curriculum yet" description="This school hasn't added any curriculum topics." />
       ) : (
         <div className="space-y-3">
-          {curriculum.map(cls => (
+          {groupedList.map(cls => (
             <div key={cls.class_id} className="reads-card overflow-hidden">
               <button onClick={() => toggle(cls.class_id)}
                 className="w-full px-4 py-3 flex items-center justify-between">
                 <p className="font-bold text-reads-navy text-sm">{cls.class_name}</p>
-                <span className="text-reads-muted text-xs">{cls.subjects.length} subjects</span>
+                <span className="text-reads-muted text-xs">{cls.subjects.length} subject{cls.subjects.length !== 1 ? 's' : ''}</span>
               </button>
               {expanded[cls.class_id] && (
                 <div className="border-t border-gray-100 divide-y divide-gray-100">
@@ -786,17 +835,27 @@ function SchoolCurriculumSection() {
                       <button onClick={() => toggle(subj.id)}
                         className="w-full px-4 py-2 flex items-center justify-between bg-gray-50">
                         <p className="font-semibold text-reads-navy text-xs">{subj.name}</p>
-                        <span className="text-reads-muted text-xs">{subj.topics.length} topics</span>
+                        <span className="text-reads-muted text-xs">{subj.topics.length} topic{subj.topics.length !== 1 ? 's' : ''}</span>
                       </button>
                       {expanded[subj.id] && (
                         <div className="px-4 py-2 space-y-1">
                           {subj.topics.map(t => (
-                            <div key={t.id} className="flex items-start gap-2 py-1">
-                              <span className="text-[10px] bg-reads-green-bg text-reads-green px-1.5 py-0.5 rounded font-bold flex-shrink-0">T{t.term}{t.week ? ` W${t.week}` : ''}</span>
-                              <div>
-                                <p className="text-reads-navy text-xs font-semibold">{t.topic}</p>
-                                {t.subtopic && <p className="text-reads-muted text-[10px]">{t.subtopic}</p>}
+                            <div key={t.id} className="flex items-start justify-between gap-2 py-1.5 border-b border-gray-50 last:border-0">
+                              <div className="flex items-start gap-2 flex-1 min-w-0">
+                                <span className="text-[10px] bg-reads-green-bg text-reads-green px-1.5 py-0.5 rounded font-bold flex-shrink-0 mt-0.5">
+                                  T{t.term}{t.week ? ` W${t.week}` : ''}
+                                </span>
+                                <div className="min-w-0">
+                                  <p className="text-reads-navy text-xs font-semibold">{t.topic}</p>
+                                  {t.subtopic && <p className="text-reads-muted text-[10px]">{t.subtopic}</p>}
+                                </div>
                               </div>
+                              <button
+                                onClick={() => handleDelete(t.id)}
+                                disabled={deleting === t.id}
+                                className="flex-shrink-0 text-reads-red text-[10px] font-bold px-2 py-1 rounded hover:bg-red-50 transition-colors disabled:opacity-40">
+                                {deleting === t.id ? '…' : 'Delete'}
+                              </button>
                             </div>
                           ))}
                         </div>
