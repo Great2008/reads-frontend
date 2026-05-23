@@ -70,7 +70,7 @@ const AuthHeader = ({ onBack, title, subtitle }) => (
 );
 
 // ── LOGIN ──────────────────────────────────────────────────────────────────────
-const LoginView = ({ onLoginSuccess, onGoRegister, onGoForgot, onPartnerPending }) => {
+const LoginView = ({ onLoginSuccess, onGoRegister, onGoForgot, onPartnerPending, onNeedsVerification }) => {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [showPw, setShowPw] = useState(false);
@@ -89,9 +89,16 @@ const LoginView = ({ onLoginSuccess, onGoRegister, onGoForgot, onPartnerPending 
         onPartnerPending && onPartnerPending(email.trim().toLowerCase());
         return;
       }
+      if (msg.startsWith('EMAIL_NOT_VERIFIED:')) {
+        const userId = msg.replace('EMAIL_NOT_VERIFIED:', '').trim();
+        onNeedsVerification && onNeedsVerification(userId, email.trim().toLowerCase());
+        return;
+      }
       if (msg.startsWith('PARTNER_REJECTED:')) {
         const reason = msg.replace('PARTNER_REJECTED:', '').trim();
         setError(reason ? `Application rejected: ${reason}` : 'Your application was not approved. Contact support.');
+      } else if (msg === 'SESSION_EXPIRED') {
+        setError('Session expired. Please log in again.');
       } else {
         setError(msg || 'Login failed. Please try again.');
       }
@@ -335,7 +342,7 @@ const RegisterView = ({ onSuccess, onBack }) => {
 };
 
 // ── OTP VERIFY ─────────────────────────────────────────────────────────────────
-const OtpView = ({ userId, email, onVerified, onBack }) => {
+const OtpView = ({ userId, email, onVerified, onBack, fromLogin }) => {
   const [otp, setOtp] = useState('');
   const [loading, setLoading] = useState(false);
   const [resending, setResending] = useState(false);
@@ -364,11 +371,13 @@ const OtpView = ({ userId, email, onVerified, onBack }) => {
     setResending(false);
   };
 
+  const subtitle = fromLogin
+    ? `Your account isn't verified yet. We sent a new 6-digit code to ${email} — enter it below to complete verification.`
+    : `We sent a 6-digit code to ${email}. Enter it below to activate your account.`;
+
   return (
     <div className="animate-fade-in">
-      <AuthHeader onBack={onBack} title="Verify Email"
-        subtitle={`We sent a 6-digit code to ${email}. Enter it below to activate your account.`}
-      />
+      <AuthHeader onBack={onBack} title="Verify Email" subtitle={subtitle} />
       <div className="flex justify-center mb-6">
         <div className="w-16 h-16 bg-reads-green-bg rounded-2xl flex items-center justify-center">
           <ShieldCheck size={32} className="text-reads-green" />
@@ -541,6 +550,10 @@ export default function AuthModule({ onLoginSuccess }) {
             onGoRegister={() => setView('register')}
             onGoForgot={() => setView('forgot')}
             onPartnerPending={(email) => { setPartnerEmail(email); setView('partner-pending'); }}
+            onNeedsVerification={(userId, email) => {
+              setPendingOtp({ userId, email, fromLogin: true });
+              setView('otp');
+            }}
           />
         )}
         {view === 'register' && (
@@ -550,8 +563,9 @@ export default function AuthModule({ onLoginSuccess }) {
           <OtpView
             userId={pendingOtp.userId}
             email={pendingOtp.email}
+            fromLogin={pendingOtp.fromLogin}
             onVerified={handleOtpVerified}
-            onBack={() => setView('register')}
+            onBack={() => setView(pendingOtp.fromLogin ? 'login' : 'register')}
           />
         )}
         {view === 'partner-pending' && (
