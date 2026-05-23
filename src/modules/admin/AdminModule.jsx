@@ -749,6 +749,8 @@ function SchoolCurriculumSection() {
   const [toastMsg, setToastMsg] = useState(null);
   const showToast = (msg) => { setToastMsg(msg); setTimeout(() => setToastMsg(null), 3000); };
 
+  // Admin view is read-only — schools manage their own curriculum
+
   useEffect(() => {
     api.admin.getSchools()
       .then(d => setSchools(d?.schools || []))
@@ -771,16 +773,7 @@ function SchoolCurriculumSection() {
     finally { setCLoading(false); }
   };
 
-  const handleDelete = async (topicId) => {
-    if (!confirm('Delete this topic?')) return;
-    setDeleting(topicId);
-    try {
-      await api.del(`/admin/curriculum/${topicId}`);
-      setTopics(prev => prev.filter(t => t.id !== topicId));
-      showToast('Topic deleted');
-    } catch (e) { showToast(e.message || 'Failed to delete'); }
-    finally { setDeleting(null); }
-  };
+  const handleDelete = null; // Admin is read-only for curriculum
 
   const toggle = (key) => setExpanded(e => ({ ...e, [key]: !e[key] }));
 
@@ -842,22 +835,14 @@ function SchoolCurriculumSection() {
                       {expanded[subj.id] && (
                         <div className="px-4 py-2 space-y-1">
                           {subj.topics.map(t => (
-                            <div key={t.id} className="flex items-start justify-between gap-2 py-1.5 border-b border-gray-50 last:border-0">
-                              <div className="flex items-start gap-2 flex-1 min-w-0">
-                                <span className="text-[10px] bg-reads-green-bg text-reads-green px-1.5 py-0.5 rounded font-bold flex-shrink-0 mt-0.5">
-                                  T{t.term}{t.week ? ` W${t.week}` : ''}
-                                </span>
-                                <div className="min-w-0">
-                                  <p className="text-reads-navy text-xs font-semibold">{t.topic}</p>
-                                  {t.subtopic && <p className="text-reads-muted text-[10px]">{t.subtopic}</p>}
-                                </div>
+                            <div key={t.id} className="flex items-start gap-2 py-1.5 border-b border-gray-50 last:border-0">
+                              <span className="text-[10px] bg-reads-green-bg text-reads-green px-1.5 py-0.5 rounded font-bold flex-shrink-0 mt-0.5">
+                                T{t.term}{t.week ? ` W${t.week}` : ''}
+                              </span>
+                              <div className="min-w-0">
+                                <p className="text-reads-navy text-xs font-semibold">{t.topic}</p>
+                                {t.subtopic && <p className="text-reads-muted text-[10px]">{t.subtopic}</p>}
                               </div>
-                              <button
-                                onClick={() => handleDelete(t.id)}
-                                disabled={deleting === t.id}
-                                className="flex-shrink-0 text-reads-red text-[10px] font-bold px-2 py-1 rounded hover:bg-red-50 transition-colors disabled:opacity-40">
-                                {deleting === t.id ? '…' : 'Delete'}
-                              </button>
                             </div>
                           ))}
                         </div>

@@ -797,9 +797,166 @@ function ResultsSection({ classes }) {
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
+// STUDENTS SECTION
+// ═══════════════════════════════════════════════════════════════════════════
+function StudentsSection() {
+  const [view, setView] = useState('enrolled'); // 'enrolled' | 'requests'
+  const [students, setStudents] = useState([]);
+  const [requests, setRequests] = useState([]);
+  const [loading, setLoading] = useState(false);
+  const [acting, setActing] = useState(null);
+  const [toast, showToast] = useToast();
+
+  const loadStudents = async () => {
+    setLoading(true);
+    try {
+      const d = await api.school.getStudents();
+      setStudents(d?.students || []);
+    } catch { showToast('Failed to load students', 'error'); }
+    finally { setLoading(false); }
+  };
+
+  const loadRequests = async () => {
+    setLoading(true);
+    try {
+      const d = await api.get('/school/students/requests');
+      setRequests(d?.requests || []);
+    } catch { showToast('Failed to load requests', 'error'); }
+    finally { setLoading(false); }
+  };
+
+  useEffect(() => {
+    if (view === 'enrolled') loadStudents();
+    else loadRequests();
+  }, [view]);
+
+  const handleApprove = async (studentId) => {
+    setActing(studentId);
+    try {
+      await api.post(`/school/students/requests/${studentId}/approve`, {});
+      showToast('Student approved and enrolled');
+      loadRequests();
+    } catch (err) { showToast(err.message || 'Failed', 'error'); }
+    finally { setActing(null); }
+  };
+
+  const handleReject = async (studentId) => {
+    if (!confirm('Reject this affiliation request?')) return;
+    setActing(studentId + '_reject');
+    try {
+      await api.post(`/school/students/requests/${studentId}/reject`, {});
+      showToast('Request rejected');
+      loadRequests();
+    } catch (err) { showToast(err.message || 'Failed', 'error'); }
+    finally { setActing(null); }
+  };
+
+  const handleDeaffiliate = async (student) => {
+    if (!confirm(`Remove ${student.full_name} from the school?\n\nThey will have a 30-day recovery window.`)) return;
+    setActing(student.id + '_deaff');
+    try {
+      await api.post(`/school/students/${student.id}/deaffiliate`, {});
+      showToast(`${student.full_name} deaffiliated`);
+      loadStudents();
+    } catch (err) { showToast(err.message || 'Failed', 'error'); }
+    finally { setActing(null); }
+  };
+
+  return (
+    <div className="px-4 pt-2 pb-4 animate-fade-in space-y-4">
+      <div>
+        <h2 className="font-black text-reads-navy text-lg">Students</h2>
+        <p className="text-reads-muted text-xs">Manage enrolled students and affiliation requests.</p>
+      </div>
+
+      {/* Toggle */}
+      <div className="flex bg-gray-100 rounded-2xl p-1 gap-1">
+        {[
+          { key: 'enrolled', label: 'Enrolled' },
+          { key: 'requests', label: `Requests${requests.length ? ` (${requests.length})` : ''}` },
+        ].map(t => (
+          <button key={t.key} onClick={() => setView(t.key)}
+            className={`flex-1 py-2 rounded-xl text-sm font-bold transition-all
+              ${view === t.key ? 'bg-white text-reads-navy shadow-sm' : 'text-reads-muted'}`}>
+            {t.label}
+          </button>
+        ))}
+      </div>
+
+      {loading ? (
+        <div className="flex justify-center py-10"><Loader2 size={24} className="animate-spin text-reads-green" /></div>
+      ) : view === 'enrolled' ? (
+        students.length === 0 ? (
+          <EmptyCard icon={Users} title="No students yet" desc="Students will appear here once their affiliation requests are approved." />
+        ) : (
+          <div className="space-y-2">
+            {students.map(s => (
+              <div key={s.id} className="reads-card px-4 py-3 flex items-center gap-3">
+                <div className="w-10 h-10 rounded-2xl bg-reads-green-bg flex items-center justify-center flex-shrink-0">
+                  <span className="font-black text-reads-green text-sm">{s.full_name?.[0]}</span>
+                </div>
+                <div className="flex-1 min-w-0">
+                  <p className="font-bold text-reads-navy text-sm truncate">{s.full_name}</p>
+                  <p className="text-reads-muted text-xs">{s.class_name || 'No class'}</p>
+                </div>
+                <button
+                  onClick={() => handleDeaffiliate(s)}
+                  disabled={acting === s.id + '_deaff'}
+                  className="text-reads-red text-xs font-bold px-3 py-1.5 rounded-xl hover:bg-red-50 transition-colors disabled:opacity-40 flex-shrink-0">
+                  {acting === s.id + '_deaff' ? '…' : 'Remove'}
+                </button>
+              </div>
+            ))}
+          </div>
+        )
+      ) : (
+        requests.length === 0 ? (
+          <EmptyCard icon={Users} title="No pending requests" desc="When students request to join your school, they'll appear here for you to approve or reject." />
+        ) : (
+          <div className="space-y-2">
+            {requests.map(r => (
+              <div key={r.id} className="reads-card px-4 py-3">
+                <div className="flex items-center gap-3 mb-2">
+                  <div className="w-10 h-10 rounded-2xl bg-amber-50 flex items-center justify-center flex-shrink-0">
+                    <span className="font-black text-amber-500 text-sm">{r.full_name?.[0]}</span>
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <p className="font-bold text-reads-navy text-sm truncate">{r.full_name}</p>
+                    <p className="text-reads-muted text-xs">{r.email}</p>
+                    {r.requested_class && <p className="text-reads-muted text-xs">Requested: {r.requested_class}</p>}
+                  </div>
+                </div>
+                <div className="flex gap-2">
+                  <button
+                    onClick={() => handleApprove(r.id)}
+                    disabled={acting === r.id}
+                    className="flex-1 reads-btn-primary py-2 text-xs flex items-center justify-center gap-1">
+                    {acting === r.id ? <Loader2 size={12} className="animate-spin" /> : <CheckCircle size={12} />}
+                    Approve
+                  </button>
+                  <button
+                    onClick={() => handleReject(r.id)}
+                    disabled={acting === r.id + '_reject'}
+                    className="flex-1 reads-btn-secondary py-2 text-xs text-reads-red border-red-200 flex items-center justify-center gap-1">
+                    {acting === r.id + '_reject' ? '…' : <><XCircle size={12} /> Reject</>}
+                  </button>
+                </div>
+              </div>
+            ))}
+          </div>
+        )
+      )}
+      {toast && <Toast {...toast} />}
+    </div>
+  );
+}
+
+
+// ═══════════════════════════════════════════════════════════════════════════
 // MAIN MODULE
 // ═══════════════════════════════════════════════════════════════════════════
 const TABS = [
+  { key: 'students',    label: 'Students',    icon: Users },
   { key: 'subjects',    label: 'Subjects',    icon: BookMarked },
   { key: 'curriculum',  label: 'Curriculum',  icon: Layers },
   { key: 'fees',        label: 'Fees',        icon: DollarSign },
@@ -845,6 +1002,7 @@ export default function SchoolPortalModule({ onBack }) {
       </div>
 
       <main className="max-w-lg mx-auto pt-28 pb-10">
+        {tab === 'students'   && <StudentsSection />}
         {tab === 'subjects'   && <SubjectsSection   classes={classes} />}
         {tab === 'curriculum' && <CurriculumSection classes={classes} />}
         {tab === 'fees'       && <FeesSection        classes={classes} />}
