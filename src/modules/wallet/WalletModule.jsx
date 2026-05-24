@@ -1,15 +1,21 @@
-import { useState, useEffect } from 'react';
-import { Coins, ArrowUpRight, ArrowDownLeft, Send, RefreshCw, Copy, CheckCircle, Loader2, Filter } from 'lucide-react';
+import { useState, useEffect, useCallback } from 'react';
+import {
+  Coins, ArrowUpRight, ArrowDownLeft, Send, RefreshCw,
+  Copy, CheckCircle, Loader2, ExternalLink, Wallet,
+  Link, LinkIcon, Unlink, ChevronDown, ChevronUp, AlertCircle,
+} from 'lucide-react';
 import { api } from '../../services/api.js';
-import { LoadingOverlay, EmptyState, Badge, Modal, Toast } from '../../components/UI.jsx';
+import { LoadingOverlay, EmptyState, Modal, Toast } from '../../components/UI.jsx';
 
 const TX_TYPES = {
-  earned:    { label: 'Earned',    color: 'text-reads-green', bg: 'bg-reads-green-bg',   icon: ArrowDownLeft },
-  received:  { label: 'Received',  color: 'text-reads-green', bg: 'bg-reads-green-bg',   icon: ArrowDownLeft },
-  sent:      { label: 'Sent',      color: 'text-reads-red',   bg: 'bg-reads-red-bg',     icon: ArrowUpRight  },
-  spent:     { label: 'Spent',     color: 'text-reads-red',   bg: 'bg-reads-red-bg',     icon: ArrowUpRight  },
-  fee:       { label: 'Fee',       color: 'text-reads-muted', bg: 'bg-gray-100',         icon: ArrowUpRight  },
+  earned:   { label: 'Earned',   color: 'text-reads-green', bg: 'bg-reads-green-bg',  icon: ArrowDownLeft },
+  received: { label: 'Received', color: 'text-reads-green', bg: 'bg-reads-green-bg',  icon: ArrowDownLeft },
+  sent:     { label: 'Sent',     color: 'text-reads-red',   bg: 'bg-reads-red-bg',    icon: ArrowUpRight  },
+  spent:    { label: 'Spent',    color: 'text-reads-red',   bg: 'bg-reads-red-bg',    icon: ArrowUpRight  },
+  fee:      { label: 'Fee',      color: 'text-reads-muted', bg: 'bg-gray-100',        icon: ArrowUpRight  },
 };
+
+const SUPPORTED_WALLETS = ['eternl', 'nami', 'typhon', 'vespr', 'flint'];
 
 const TxRow = ({ tx }) => {
   const meta = TX_TYPES[tx.type] || TX_TYPES.sent;
@@ -90,20 +96,248 @@ const SendModal = ({ balance, onClose, onSent }) => {
   );
 };
 
+// ── Cardano Wallet Section ────────────────────────────────────────────────────
+const CardanoSection = ({ linkedAddress, onLinked, onUnlinked, showToast }) => {
+  const [expanded, setExpanded]         = useState(!!linkedAddress);
+  const [connecting, setConnecting]     = useState(false);
+  const [unlinking, setUnlinking]       = useState(false);
+  const [onChainBalance, setOnChain]    = useState(null);
+  const [loadingBal, setLoadingBal]     = useState(false);
+  const [manualAddr, setManualAddr]     = useState('');
+  const [showManual, setShowManual]     = useState(false);
+  const [copied, setCopied]             = useState(false);
+
+  const detectWallet = () => SUPPORTED_WALLETS.find((w) => window.cardano?.[w]);
+
+  const copyAddr = () => {
+    navigator.clipboard.writeText(linkedAddress).then(() => {
+      setCopied(true); setTimeout(() => setCopied(false), 2000);
+    });
+  };
+
+  const connectBrowser = async () => {
+    const walletName = detectWallet();
+    if (!walletName) {
+      setShowManual(true);
+      return;
+    }
+    setConnecting(true);
+    try {
+      const walletApi = await window.cardano[walletName].enable();
+      const changeAddrHex = await walletApi.getChangeAddress();
+      // Decode hex CBOR address to bech32
+      // CIP-30 returns hex bytes — we send raw hex and backend validates
+      const address = changeAddrHex;
+      await api.wallet.linkCardano(address);
+      onLinked(address);
+      showToast(`${walletName} wallet connected!`);
+    } catch (e) {
+      showToast(e.message || 'Connection failed', 'error');
+    } finally { setConnecting(false); }
+  };
+
+  const linkManual = async () => {
+    if (!manualAddr.trim()) return;
+    setConnecting(true);
+    try {
+      await api.wallet.linkCardano(manualAddr.trim());
+      onLinked(manualAddr.trim());
+      setShowManual(false);
+      showToast('Cardano wallet linked!');
+    } catch (e) {
+      showToast(e.message || 'Invalid address', 'error');
+    } finally { setConnecting(false); }
+  };
+
+  const unlink = async () => {
+    setUnlinking(true);
+    try {
+      await api.wallet.unlinkCardano();
+      onUnlinked();
+      setOnChain(null);
+      showToast('Wallet unlinked');
+    } catch (e) {
+      showToast('Failed to unlink', 'error');
+    } finally { setUnlinking(false); }
+  };
+
+  const fetchOnChainBalance = async () => {
+    if (!linkedAddress) return;
+    setLoadingBal(true);
+    try {
+      const data = await api.wallet.cardanoBalance();
+      setOnChain(data);
+    } catch (_) {
+      showToast('Could not fetch on-chain balance', 'error');
+    } finally { setLoadingBal(false); }
+  };
+
+  useEffect(() => {
+    if (linkedAddress && expanded) fetchOnChainBalance();
+  }, [linkedAddress, expanded]);
+
+  const shortAddr = (addr) => addr ? `${addr.slice(0, 14)}...${addr.slice(-6)}` : '';
+
+  return (
+    <div className="reads-card mb-5 overflow-hidden">
+      {/* Header — always visible */}
+      <button
+        onClick={() => setExpanded((v) => !v)}
+        className="w-full flex items-center gap-3 p-4"
+      >
+        <div className="w-10 h-10 bg-blue-50 rounded-2xl flex items-center justify-center flex-shrink-0">
+          <span className="text-lg font-black text-blue-600">₳</span>
+        </div>
+        <div className="flex-1 text-left">
+          <p className="font-bold text-reads-navy text-sm">Cardano Wallet</p>
+          <p className="text-reads-muted text-xs">
+            {linkedAddress ? shortAddr(linkedAddress) : 'Not connected'}
+          </p>
+        </div>
+        <div className="flex items-center gap-2">
+          {linkedAddress && (
+            <span className="w-2 h-2 rounded-full bg-reads-green" />
+          )}
+          {expanded ? <ChevronUp size={16} className="text-reads-muted" /> : <ChevronDown size={16} className="text-reads-muted" />}
+        </div>
+      </button>
+
+      {/* Expanded content */}
+      {expanded && (
+        <div className="px-4 pb-4 space-y-3 border-t border-gray-50 pt-3">
+
+          {/* Not linked state */}
+          {!linkedAddress && (
+            <>
+              {!showManual ? (
+                <>
+                  <p className="text-reads-muted text-xs">
+                    Connect your Cardano wallet to receive $READS on-chain and use token features.
+                  </p>
+                  <button
+                    onClick={connectBrowser}
+                    disabled={connecting}
+                    className="reads-btn-primary w-full flex items-center justify-center gap-2"
+                  >
+                    {connecting
+                      ? <Loader2 size={16} className="animate-spin" />
+                      : <LinkIcon size={16} />}
+                    {connecting ? 'Connecting…' : 'Connect Wallet (Eternl / Nami)'}
+                  </button>
+                  <button
+                    onClick={() => setShowManual(true)}
+                    className="w-full text-reads-muted text-xs underline text-center"
+                  >
+                    Enter address manually
+                  </button>
+                  <p className="text-reads-muted text-[10px] text-center">
+                    Supports Eternl · Nami · Typhon · Vespr
+                  </p>
+                </>
+              ) : (
+                <>
+                  <label className="reads-label">Paste your Preprod address</label>
+                  <input
+                    className="reads-input text-xs"
+                    placeholder="addr_test1..."
+                    value={manualAddr}
+                    onChange={(e) => setManualAddr(e.target.value)}
+                  />
+                  <div className="flex gap-2">
+                    <button onClick={() => setShowManual(false)}
+                      className="flex-1 reads-btn-secondary text-sm py-2">Cancel</button>
+                    <button onClick={linkManual} disabled={connecting}
+                      className="flex-1 reads-btn-primary text-sm py-2 flex items-center justify-center gap-1">
+                      {connecting && <Loader2 size={14} className="animate-spin" />}
+                      Link
+                    </button>
+                  </div>
+                </>
+              )}
+            </>
+          )}
+
+          {/* Linked state */}
+          {linkedAddress && (
+            <>
+              {/* Address row */}
+              <div className="bg-gray-50 rounded-2xl px-3 py-2.5 flex items-center gap-2">
+                <code className="text-reads-navy text-xs font-mono flex-1 truncate">{linkedAddress}</code>
+                <button onClick={copyAddr} className="flex-shrink-0 text-reads-muted">
+                  {copied ? <CheckCircle size={16} className="text-reads-green" /> : <Copy size={16} />}
+                </button>
+              </div>
+
+              {/* On-chain balance */}
+              {loadingBal ? (
+                <div className="flex items-center gap-2 text-reads-muted text-xs">
+                  <Loader2 size={14} className="animate-spin" /> Fetching on-chain balance…
+                </div>
+              ) : onChainBalance ? (
+                <div className="grid grid-cols-2 gap-2">
+                  <div className="bg-blue-50 rounded-2xl p-3 text-center">
+                    <p className="font-black text-reads-navy text-base">{onChainBalance.reads_tokens?.toLocaleString() ?? 0}</p>
+                    <p className="text-reads-muted text-[10px] mt-0.5">$READS on-chain</p>
+                  </div>
+                  <div className="bg-gray-50 rounded-2xl p-3 text-center">
+                    <p className="font-black text-reads-navy text-base">{onChainBalance.ada ?? 0}</p>
+                    <p className="text-reads-muted text-[10px] mt-0.5">ADA balance</p>
+                  </div>
+                </div>
+              ) : null}
+
+              {/* Network badge */}
+              <div className="flex items-center gap-2">
+                <span className="bg-yellow-100 text-yellow-700 text-[10px] font-bold px-2 py-0.5 rounded-full uppercase tracking-wide">
+                  {onChainBalance?.network ?? 'preprod'}
+                </span>
+                <button
+                  onClick={fetchOnChainBalance}
+                  className="text-reads-muted text-xs flex items-center gap-1"
+                >
+                  <RefreshCw size={12} /> Refresh
+                </button>
+                {onChainBalance?.network === 'preprod' && (
+                  <a
+                    href={`https://preprod.cardanoscan.io/address/${linkedAddress}`}
+                    target="_blank" rel="noreferrer"
+                    className="text-reads-muted text-xs flex items-center gap-1 ml-auto"
+                  >
+                    View <ExternalLink size={11} />
+                  </a>
+                )}
+              </div>
+
+              {/* Unlink */}
+              <button
+                onClick={unlink}
+                disabled={unlinking}
+                className="w-full flex items-center justify-center gap-2 text-reads-red text-xs py-2 border border-reads-red/30 rounded-2xl active:scale-95 transition-transform"
+              >
+                {unlinking ? <Loader2 size={14} className="animate-spin" /> : <Unlink size={14} />}
+                {unlinking ? 'Unlinking…' : 'Unlink Wallet'}
+              </button>
+            </>
+          )}
+        </div>
+      )}
+    </div>
+  );
+};
+
 // ── Main Wallet Module ────────────────────────────────────────────────────────
 export default function WalletModule({ balance: initialBalance, onUpdateBalance }) {
-  const [balance, setBalance] = useState(initialBalance ?? 0);
+  const [balance, setBalance]           = useState(initialBalance ?? 0);
   const [transactions, setTransactions] = useState([]);
-  const [loading, setLoading] = useState(true);
-  const [txFilter, setTxFilter] = useState('all');
-  const [showSend, setShowSend] = useState(false);
-  const [copied, setCopied] = useState(false);
-  const [walletAddress, setWalletAddress] = useState('');
-  const [toast, setToast] = useState(null);
+  const [loading, setLoading]           = useState(true);
+  const [txFilter, setTxFilter]         = useState('all');
+  const [showSend, setShowSend]         = useState(false);
+  const [cardanoAddress, setCardano]    = useState('');
+  const [toast, setToast]               = useState(null);
 
-  const showToast = (msg, type = 'success') => {
-    setToast({ msg, type }); setTimeout(() => setToast(null), 3000);
-  };
+  const showToast = useCallback((msg, type = 'success') => {
+    setToast({ msg, type }); setTimeout(() => setToast(null), 3500);
+  }, []);
 
   useEffect(() => {
     const load = async () => {
@@ -119,7 +353,7 @@ export default function WalletModule({ balance: initialBalance, onUpdateBalance 
         }
         if (txData.status === 'fulfilled') setTransactions(txData.value?.transactions || []);
         if (me.status === 'fulfilled' && me.value?.cardano_address) {
-          setWalletAddress(me.value.cardano_address);
+          setCardano(me.value.cardano_address);
         }
       } catch (_) {}
       setLoading(false);
@@ -127,21 +361,15 @@ export default function WalletModule({ balance: initialBalance, onUpdateBalance 
     load();
   }, []);
 
-  const copyAddress = () => {
-    if (!walletAddress) return;
-    navigator.clipboard.writeText(walletAddress).then(() => {
-      setCopied(true); setTimeout(() => setCopied(false), 2000);
-    });
-  };
-
   const handleSent = async (amt) => {
     setShowSend(false);
     showToast(`Sent ${amt} $READS successfully!`);
-    const newBal = await api.wallet.getBalance();
-    setBalance(newBal);
-    onUpdateBalance?.(newBal);
-    const txData = await api.wallet.getTransactions({ limit: 50 });
-    setTransactions(txData?.transactions || []);
+    const [newBal, txData] = await Promise.allSettled([
+      api.wallet.getBalance(),
+      api.wallet.getTransactions({ limit: 50 }),
+    ]);
+    if (newBal.status === 'fulfilled') { setBalance(newBal.value); onUpdateBalance?.(newBal.value); }
+    if (txData.status === 'fulfilled') setTransactions(txData.value?.transactions || []);
   };
 
   const filtered = transactions.filter((tx) => {
@@ -150,7 +378,6 @@ export default function WalletModule({ balance: initialBalance, onUpdateBalance 
     return true;
   });
 
-  // Stats
   const totalEarned = transactions
     .filter((t) => t.type === 'earned' || t.type === 'received')
     .reduce((s, t) => s + t.amount, 0);
@@ -166,7 +393,6 @@ export default function WalletModule({ balance: initialBalance, onUpdateBalance 
       <div className="relative bg-reads-navy rounded-3xl p-6 mb-5 overflow-hidden shadow-reads-card">
         <div className="absolute -top-8 -right-8 w-32 h-32 bg-reads-gold/10 rounded-full" />
         <div className="absolute -bottom-10 -left-6 w-28 h-28 bg-reads-green/10 rounded-full" />
-
         <div className="relative z-10">
           <p className="text-reads-muted-light text-xs uppercase tracking-widest mb-1">Total Balance</p>
           <div className="flex items-end gap-2 mb-4">
@@ -205,18 +431,13 @@ export default function WalletModule({ balance: initialBalance, onUpdateBalance 
         </div>
       </div>
 
-      {/* Cardano address */}
-      {walletAddress && (
-        <div className="reads-card p-4 mb-5">
-          <p className="text-reads-muted text-xs mb-1.5">Cardano Wallet Address</p>
-          <div className="flex items-center gap-2">
-            <code className="text-reads-navy text-xs font-mono flex-1 truncate">{walletAddress}</code>
-            <button onClick={copyAddress} className="flex-shrink-0 text-reads-muted hover:text-reads-navy transition-colors">
-              {copied ? <CheckCircle size={18} className="text-reads-green" /> : <Copy size={18} />}
-            </button>
-          </div>
-        </div>
-      )}
+      {/* Cardano wallet section */}
+      <CardanoSection
+        linkedAddress={cardanoAddress}
+        onLinked={(addr) => setCardano(addr)}
+        onUnlinked={() => setCardano('')}
+        showToast={showToast}
+      />
 
       {/* Transactions */}
       <div>

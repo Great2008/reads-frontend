@@ -317,6 +317,14 @@ export const wallet = {
   send: (data) => post('/wallet/send', data),
   convertFiat: (data) => post('/wallet/convert', data),
   getStats: () => get('/wallet/stats'),
+
+  // Cardano on-chain
+  linkCardano: (address) => post('/wallet/link-cardano', { address }),
+  unlinkCardano: () => del('/wallet/unlink-cardano'),
+  cardanoBalance: () => get('/wallet/cardano-balance'),
+  verifyPayment: (data) => post('/wallet/verify-payment', data),
+  txConfirmations: (txHash) => get(`/wallet/tx-confirmations/${txHash}`),
+  tokenInfo: () => get('/wallet/token-info'),
 };
 
 // ── Marketplace ───────────────────────────────────────────────────────────────
