@@ -13,7 +13,7 @@ function JoinSchoolFlow({ onJoined, onClose }) {
   const [schoolInfo, setSchoolInfo] = useState(null);
   const [classes, setClasses] = useState([]);
   const [selectedClass, setSelectedClass] = useState('');
-  const [step, setStep] = useState(1); // 1=code, 2=class
+  const [step, setStep] = useState(1); // 1=code, 2=class, 3=pending
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
 
@@ -34,15 +34,29 @@ function JoinSchoolFlow({ onJoined, onClose }) {
     setLoading(true); setError('');
     try {
       await api.students.enroll(schoolCode.trim().toUpperCase(), selectedClass || null);
-      onJoined();
+      setStep(3); // show pending confirmation
     } catch (e) {
-      setError(e.message || 'Enrollment failed.');
+      setError(e.message || 'Request failed.');
     } finally { setLoading(false); }
   };
 
   return (
     <Modal title="Join a School" onClose={onClose}>
-      {step === 1 ? (
+      {step === 3 ? (
+        <div className="text-center py-4 space-y-4">
+          <div className="w-16 h-16 bg-amber-50 rounded-3xl flex items-center justify-center mx-auto">
+            <span className="text-3xl">⏳</span>
+          </div>
+          <div>
+            <p className="font-black text-reads-navy text-lg">Request Sent!</p>
+            <p className="text-reads-muted text-sm mt-1">
+              Your request to join <span className="font-bold text-reads-navy">{schoolInfo?.name}</span> has been sent.
+              You'll be notified once the school approves your affiliation.
+            </p>
+          </div>
+          <button onClick={onClose} className="reads-btn-primary w-full">Done</button>
+        </div>
+      ) : step === 1 ? (
         <div className="space-y-4">
           <div>
             <label className="reads-label">School Code</label>
@@ -61,7 +75,7 @@ function JoinSchoolFlow({ onJoined, onClose }) {
             Find School
           </button>
         </div>
-      ) : (
+      ) : step === 2 ? (
         <div className="space-y-4">
           {schoolInfo && (
             <div className="reads-card p-3 border-l-4 border-reads-green bg-reads-green-bg">
@@ -84,16 +98,16 @@ function JoinSchoolFlow({ onJoined, onClose }) {
               </div>
             </>
           ) : (
-            <p className="text-reads-muted text-sm text-center py-2">No classes set up yet — you can still enroll.</p>
+            <p className="text-reads-muted text-sm text-center py-2">No classes set up yet — you can still send a request.</p>
           )}
           {error && <p className="text-reads-red text-sm">{error}</p>}
           <button onClick={enroll} disabled={loading || (classes.length > 0 && !selectedClass)}
             className="reads-btn-primary w-full flex items-center justify-center gap-2">
             {loading && <Loader2 size={18} className="animate-spin" />}
-            Enroll in School
+            Send Affiliation Request
           </button>
         </div>
-      )}
+      ) : null}
     </Modal>
   );
 }

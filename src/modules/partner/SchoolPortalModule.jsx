@@ -349,6 +349,15 @@ function CurriculumSection({ classes }) {
   const [loading, setLoading] = useState(false);
   const [toast, showToast] = useToast();
 
+  const handleTopicDelete = async (topicId) => {
+    if (!confirm('Delete this topic?')) return;
+    try {
+      await api.del(`/school/curriculum/topics/${topicId}`);
+      setTopics(prev => prev.filter(t => t.id !== topicId));
+      showToast('Topic deleted');
+    } catch (err) { showToast(err.message || 'Failed to delete', 'error'); }
+  };
+
   const loadTopics = async (cid, term) => {
     if (!cid) return;
     setLoading(true);
@@ -458,13 +467,20 @@ function CurriculumSection({ classes }) {
                 <p className="font-black text-reads-navy text-xs uppercase tracking-widest mb-2 mt-4">{term}</p>
                 <div className="space-y-2">
                   {items.map(t => (
-                    <div key={t.id} className="reads-card px-4 py-3">
-                      <div className="flex items-center gap-2 mb-1">
-                        {t.week && <span className="text-[10px] font-bold bg-reads-green-bg text-reads-green px-2 py-0.5 rounded-full">Wk {t.week}</span>}
-                        <span className="text-[10px] text-reads-muted">{t.subject_name}</span>
+                    <div key={t.id} className="reads-card px-4 py-3 flex items-start justify-between gap-2">
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-2 mb-1">
+                          {t.week && <span className="text-[10px] font-bold bg-reads-green-bg text-reads-green px-2 py-0.5 rounded-full">Wk {t.week}</span>}
+                          <span className="text-[10px] text-reads-muted">{t.subject_name}</span>
+                        </div>
+                        <p className="font-semibold text-reads-navy text-sm">{t.topic}</p>
+                        {t.subtopic && <p className="text-reads-muted text-xs mt-0.5">{t.subtopic}</p>}
                       </div>
-                      <p className="font-semibold text-reads-navy text-sm">{t.topic}</p>
-                      {t.subtopic && <p className="text-reads-muted text-xs mt-0.5">{t.subtopic}</p>}
+                      <button
+                        onClick={() => handleTopicDelete(t.id)}
+                        className="text-reads-red text-[10px] font-bold px-2 py-1 rounded hover:bg-red-50 flex-shrink-0">
+                        ✕
+                      </button>
                     </div>
                   ))}
                 </div>
@@ -851,12 +867,24 @@ function StudentsSection() {
     finally { setActing(null); }
   };
 
-  const handleDeaffiliate = async (student) => {
-    if (!confirm(`Remove ${student.full_name} from the school?\n\nThey will have a 30-day recovery window.`)) return;
-    setActing(student.id + '_deaff');
+  const [deaffiliateTarget, setDeaffiliateTarget] = useState(null);
+  const [deaffReason, setDeaffReason] = useState('withdrew');
+  const [deaffDetail, setDeaffDetail] = useState('');
+
+  const handleDeaffiliate = async () => {
+    if (!deaffiliateTarget) return;
+    if (deaffReason === 'other' && !deaffDetail.trim())
+      return showToast('Please describe the reason', 'error');
+    setActing(deaffiliateTarget.id + '_deaff');
     try {
-      await api.post(`/school/students/${student.id}/deaffiliate`, {});
-      showToast(`${student.full_name} deaffiliated`);
+      await api.post(`/school/students/${deaffiliateTarget.id}/deaffiliate`, {
+        reason: deaffReason,
+        reason_detail: deaffReason === 'other' ? deaffDetail.trim() : null,
+      });
+      showToast(`${deaffiliateTarget.full_name} removed`);
+      setDeaffiliateTarget(null);
+      setDeaffReason('withdrew');
+      setDeaffDetail('');
       loadStudents();
     } catch (err) { showToast(err.message || 'Failed', 'error'); }
     finally { setActing(null); }
@@ -900,10 +928,9 @@ function StudentsSection() {
                   <p className="text-reads-muted text-xs">{s.class_name || 'No class'}</p>
                 </div>
                 <button
-                  onClick={() => handleDeaffiliate(s)}
-                  disabled={acting === s.id + '_deaff'}
-                  className="text-reads-red text-xs font-bold px-3 py-1.5 rounded-xl hover:bg-red-50 transition-colors disabled:opacity-40 flex-shrink-0">
-                  {acting === s.id + '_deaff' ? '…' : 'Remove'}
+                  onClick={() => { setDeaffiliateTarget(s); setDeaffReason('withdrew'); setDeaffDetail(''); }}
+                  className="text-reads-red text-xs font-bold px-3 py-1.5 rounded-xl hover:bg-red-50 transition-colors flex-shrink-0">
+                  Remove
                 </button>
               </div>
             ))}
@@ -947,14 +974,51 @@ function StudentsSection() {
         )
       )}
       {toast && <Toast {...toast} />}
+
+      {/* Deaffiliate reason modal */}
+      {deaffiliateTarget && (
+        <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/40 animate-fade-in">
+          <div className="w-full max-w-lg bg-white rounded-t-3xl px-5 py-6 space-y-4">
+            <p className="font-black text-reads-navy text-base">Remove {deaffiliateTarget.full_name}?</p>
+            <p className="text-reads-muted text-xs">They will have a 30-day recovery window. Select a reason:</p>
+            <div className="space-y-2">
+              {[
+                { value: 'withdrew', label: 'Withdrew' },
+                { value: 'transfer', label: 'Transfer to another school' },
+                { value: 'other', label: 'Other' },
+              ].map(opt => (
+                <button key={opt.value} onClick={() => setDeaffReason(opt.value)}
+                  className={`w-full text-left px-4 py-3 rounded-xl border-2 transition-all text-sm font-semibold
+                    ${deaffReason === opt.value ? 'border-reads-red bg-red-50 text-reads-red' : 'border-gray-100 text-reads-navy'}`}>
+                  {opt.label}
+                </button>
+              ))}
+            </div>
+            {deaffReason === 'other' && (
+              <textarea
+                className="reads-input min-h-[72px] resize-none"
+                placeholder="Describe reason..."
+                value={deaffDetail}
+                onChange={e => setDeaffDetail(e.target.value)}
+              />
+            )}
+            <div className="flex gap-2 pt-2">
+              <button onClick={() => setDeaffiliateTarget(null)}
+                className="flex-1 reads-btn-secondary py-3 text-sm">Cancel</button>
+              <button
+                onClick={handleDeaffiliate}
+                disabled={acting === deaffiliateTarget?.id + '_deaff'}
+                className="flex-1 bg-reads-red text-white font-bold py-3 rounded-2xl text-sm flex items-center justify-center gap-2 disabled:opacity-50">
+                {acting === deaffiliateTarget?.id + '_deaff' ? <Loader2 size={14} className="animate-spin" /> : null}
+                Confirm Remove
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
-
-
-// ═══════════════════════════════════════════════════════════════════════════
-// MAIN MODULE
-// ═══════════════════════════════════════════════════════════════════════════
 const TABS = [
   { key: 'students',    label: 'Students',    icon: Users },
   { key: 'subjects',    label: 'Subjects',    icon: BookMarked },
@@ -963,6 +1027,9 @@ const TABS = [
   { key: 'results',     label: 'Results',     icon: Award },
 ];
 
+// ═══════════════════════════════════════════════════════════════════════════
+// MAIN MODULE
+// ═══════════════════════════════════════════════════════════════════════════
 export default function SchoolPortalModule({ onBack }) {
   const [tab, setTab] = useState('subjects');
   const [classes, setClasses] = useState([]);
