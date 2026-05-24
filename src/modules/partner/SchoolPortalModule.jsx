@@ -856,6 +856,16 @@ function StudentsSection() {
     finally { setActing(null); }
   };
 
+  const handleRecover = async (studentId) => {
+    setActing(studentId);
+    try {
+      await api.post(`/school/students/${studentId}/recover`, {});
+      showToast('Student re-affiliated successfully');
+      loadRequests();
+    } catch (err) { showToast(err.message || 'Failed', 'error'); }
+    finally { setActing(null); }
+  };
+
   const handleReject = async (studentId) => {
     if (!confirm('Reject this affiliation request?')) return;
     setActing(studentId + '_reject');
@@ -948,18 +958,25 @@ function StudentsSection() {
                     <span className="font-black text-amber-500 text-sm">{r.full_name?.[0]}</span>
                   </div>
                   <div className="flex-1 min-w-0">
-                    <p className="font-bold text-reads-navy text-sm truncate">{r.full_name}</p>
+                    <div className="flex items-center gap-2 mb-0.5">
+                      <p className="font-bold text-reads-navy text-sm truncate">{r.full_name}</p>
+                      {r.type === 'recovery' && (
+                        <span className="text-[9px] font-black bg-amber-100 text-amber-600 px-2 py-0.5 rounded-full flex-shrink-0">
+                          RECOVERY · {r.days_left_in_window}d left
+                        </span>
+                      )}
+                    </div>
                     <p className="text-reads-muted text-xs">{r.email}</p>
-                    {r.requested_class && <p className="text-reads-muted text-xs">Requested: {r.requested_class}</p>}
+                    {r.requested_class && <p className="text-reads-muted text-xs">Class: {r.requested_class}</p>}
                   </div>
                 </div>
                 <div className="flex gap-2">
                   <button
-                    onClick={() => handleApprove(r.id)}
+                    onClick={() => r.type === 'recovery' ? handleRecover(r.id) : handleApprove(r.id)}
                     disabled={acting === r.id}
                     className="flex-1 reads-btn-primary py-2 text-xs flex items-center justify-center gap-1">
                     {acting === r.id ? <Loader2 size={12} className="animate-spin" /> : <CheckCircle size={12} />}
-                    Approve
+                    {r.type === 'recovery' ? 'Re-affiliate' : 'Approve'}
                   </button>
                   <button
                     onClick={() => handleReject(r.id)}

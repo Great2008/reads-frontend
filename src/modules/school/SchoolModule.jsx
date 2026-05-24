@@ -114,10 +114,13 @@ function JoinSchoolFlow({ onJoined, onClose }) {
 
 // ── Student View — My School ───────────────────────────────────────────────────
 function MySchool({ tokenBalance, onBalanceUpdate }) {
-  const [school, setSchool] = useState(null);
+  const [profile, setProfile] = useState(null); // { status, ...data }
   const [fees, setFees] = useState([]);
   const [loading, setLoading] = useState(true);
   const [showJoin, setShowJoin] = useState(false);
+  const [showRecover, setShowRecover] = useState(false);
+  const [recoverCode, setRecoverCode] = useState('');
+  const [recoverLoading, setRecoverLoading] = useState(false);
   const [toast, setToast] = useState(null);
   const [payingId, setPayingId] = useState(null);
 
@@ -129,11 +132,12 @@ function MySchool({ tokenBalance, onBalanceUpdate }) {
     setLoading(true);
     try {
       const data = await api.school.getProfile();
-      setSchool(data);
-      // Load fees if enrolled
-      const feesData = await api.students.getMyFees().catch(() => ({ fees: [] }));
-      setFees(feesData?.fees || []);
-    } catch (_) { setSchool(null); }
+      setProfile(data);
+      if (data?.status === 'enrolled') {
+        const feesData = await api.students.getMyFees().catch(() => ({ fees: [] }));
+        setFees(feesData?.fees || []);
+      }
+    } catch (_) { setProfile({ status: 'none' }); }
     setLoading(false);
   };
 
@@ -154,9 +158,106 @@ function MySchool({ tokenBalance, onBalanceUpdate }) {
     finally { setPayingId(null); }
   };
 
+  const handleRecoveryRequest = async () => {
+    if (!recoverCode.trim()) return showToast('Enter your school code', 'error');
+    setRecoverLoading(true);
+    try {
+      await api.post('/students/recovery-request', { school_code: recoverCode.trim().toUpperCase() });
+      showToast('Recovery request sent! Await school approval.');
+      setShowRecover(false);
+      load();
+    } catch (err) { showToast(err.message || 'Failed', 'error'); }
+    finally { setRecoverLoading(false); }
+  };
+
   if (loading) return <LoadingOverlay message="Loading school…" />;
 
-  if (!school) {
+  // ── Pending state ────────────────────────────────────────────────────────
+  if (profile?.status === 'pending') {
+    return (
+      <div className="px-4 pt-10 pb-8 flex flex-col items-center text-center animate-fade-in">
+        <div className="w-20 h-20 bg-amber-50 rounded-3xl flex items-center justify-center mb-5">
+          <span className="text-4xl">⏳</span>
+        </div>
+        <h2 className="font-display font-black text-reads-navy text-xl mb-2">
+          {profile.is_recovery ? 'Recovery Request Pending' : 'Affiliation Request Pending'}
+        </h2>
+        <p className="text-reads-muted text-sm mb-6 max-w-xs">
+          Your request to {profile.is_recovery ? 're-join' : 'join'} <span className="font-bold text-reads-navy">{profile.pending_school_name}</span> is awaiting approval from the school.
+        </p>
+        <div className="reads-card px-5 py-4 w-full max-w-xs text-left space-y-2 mb-6">
+          <p className="text-reads-muted text-xs">You'll receive a notification once the school reviews your request. Check back here to see your status.</p>
+        </div>
+        <button onClick={async () => {
+          try {
+            await api.students.unenroll();
+            showToast('Request cancelled.');
+            load();
+          } catch (err) { showToast(err.message || 'Failed', 'error'); }
+        }} className="reads-btn-secondary text-sm">
+          Cancel Request
+        </button>
+        {toast && <Toast message={toast.msg} type={toast.type} onClose={() => setToast(null)} />}
+      </div>
+    );
+  }
+
+  // ── Deaffiliated — recovery window ────────────────────────────────────────
+  if (profile?.status === 'deaffiliated') {
+    return (
+      <div className="px-4 pt-10 pb-8 flex flex-col items-center text-center animate-fade-in">
+        <div className="w-20 h-20 bg-red-50 rounded-3xl flex items-center justify-center mb-5">
+          <span className="text-4xl">🏫</span>
+        </div>
+        <h2 className="font-display font-black text-reads-navy text-xl mb-2">You Left Your School</h2>
+        <p className="text-reads-muted text-sm mb-1 max-w-xs">
+          You have <span className="font-bold text-reads-red">{profile.days_left} day{profile.days_left !== 1 ? 's' : ''}</span> left to request re-affiliation and recover your school data.
+        </p>
+        <p className="text-reads-muted text-xs mb-6 max-w-xs">After the window expires you will need to apply to a school as a new student.</p>
+
+        {!showRecover ? (
+          <div className="space-y-3 w-full max-w-xs">
+            <button onClick={() => setShowRecover(true)} className="reads-btn-primary w-full">
+              Request Re-affiliation
+            </button>
+            <button onClick={() => setShowJoin(true)} className="reads-btn-secondary w-full text-sm">
+              Join a Different School
+            </button>
+          </div>
+        ) : (
+          <div className="space-y-3 w-full max-w-xs text-left">
+            <p className="text-reads-muted text-xs">Enter the school code for the school you want to re-join:</p>
+            <input
+              className="reads-input font-mono uppercase tracking-widest"
+              placeholder="e.g. SCH-ABC123"
+              value={recoverCode}
+              onChange={e => setRecoverCode(e.target.value.toUpperCase())}
+              maxLength={12}
+            />
+            <div className="flex gap-2">
+              <button onClick={() => setShowRecover(false)} className="flex-1 reads-btn-secondary text-sm">Back</button>
+              <button onClick={handleRecoveryRequest} disabled={recoverLoading}
+                className="flex-1 reads-btn-primary text-sm flex items-center justify-center gap-1">
+                {recoverLoading && <Loader2 size={14} className="animate-spin" />}
+                Send Request
+              </button>
+            </div>
+          </div>
+        )}
+
+        {showJoin && (
+          <JoinSchoolFlow
+            onJoined={() => { setShowJoin(false); load(); }}
+            onClose={() => setShowJoin(false)}
+          />
+        )}
+        {toast && <Toast message={toast.msg} type={toast.type} onClose={() => setToast(null)} />}
+      </div>
+    );
+  }
+
+  // ── Not enrolled ─────────────────────────────────────────────────────────
+  if (!profile || profile.status === 'none') {
     return (
       <div className="px-4 pt-6 animate-fade-in">
         <EmptyState
@@ -171,7 +272,7 @@ function MySchool({ tokenBalance, onBalanceUpdate }) {
         />
         {showJoin && (
           <JoinSchoolFlow
-            onJoined={() => { setShowJoin(false); showToast('Enrolled successfully!'); load(); }}
+            onJoined={() => { setShowJoin(false); showToast('Request sent!'); load(); }}
             onClose={() => setShowJoin(false)}
           />
         )}
@@ -180,8 +281,10 @@ function MySchool({ tokenBalance, onBalanceUpdate }) {
     );
   }
 
+  // ── Enrolled ─────────────────────────────────────────────────────────────
   const unpaidFees = fees.filter(f => f.status !== 'acknowledged');
   const paidFees = fees.filter(f => f.status === 'acknowledged');
+  const school = profile; // alias
 
   return (
     <div className="px-4 pt-4 pb-8 animate-fade-in space-y-4">
