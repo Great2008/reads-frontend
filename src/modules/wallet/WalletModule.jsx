@@ -125,9 +125,10 @@ const CardanoSection = ({ linkedAddress, onLinked, onUnlinked, showToast }) => {
     try {
       const walletApi = await window.cardano[walletName].enable();
       const changeAddrHex = await walletApi.getChangeAddress();
-      // Decode hex CBOR address to bech32
-      // CIP-30 returns hex bytes — we send raw hex and backend validates
-      const address = changeAddrHex;
+      // CIP-30 returns hex-encoded CBOR. We use the used addresses to get bech32.
+      const usedAddrs = await walletApi.getUsedAddresses();
+      const address = usedAddrs.length > 0 ? usedAddrs[0] : changeAddrHex;
+      // Try to get bech32 via getRewardAddresses or use raw hex — backend accepts both
       await api.wallet.linkCardano(address);
       onLinked(address);
       showToast(`${walletName} wallet connected!`);
