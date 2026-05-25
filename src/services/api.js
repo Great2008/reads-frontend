@@ -319,6 +319,11 @@ export const wallet = {
   getStats: () => get('/wallet/stats'),
 
   // Cardano on-chain
+  getPendingRewards: () => get('/wallet/rewards'),
+  issueVoucher: (rewardId) => post(`/wallet/rewards/${rewardId}/issue-voucher`, {}),
+  confirmClaim: (data) => post('/wallet/rewards/confirm-claim', data),
+  platformVkey: () => get('/wallet/rewards/platform-vkey'),
+
   linkCardano: (address) => post('/wallet/link-cardano', { address }),
   unlinkCardano: () => del('/wallet/unlink-cardano'),
   cardanoBalance: () => get('/wallet/cardano-balance'),

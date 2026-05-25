@@ -327,6 +327,186 @@ const CardanoSection = ({ linkedAddress, onLinked, onUnlinked, showToast }) => {
 };
 
 // ── Main Wallet Module ────────────────────────────────────────────────────────
+// ── On-Chain Claim Section ────────────────────────────────────────────────────
+const ClaimSection = ({ linkedAddress, showToast }) => {
+  const [rewards, setRewards]       = useState([]);
+  const [loading, setLoading]       = useState(true);
+  const [voucher, setVoucher]       = useState(null);   // active voucher data
+  const [confirming, setConfirming] = useState(false);
+  const [txHash, setTxHash]         = useState('');
+  const [claiming, setClaiming]     = useState(null);   // reward_id being claimed
+
+  useEffect(() => {
+    api.wallet.getPendingRewards()
+      .then(d => setRewards(d?.rewards || []))
+      .catch(() => {})
+      .finally(() => setLoading(false));
+  }, []);
+
+  const handleIssueVoucher = async (rewardId) => {
+    if (!linkedAddress) {
+      return showToast('Link a Cardano wallet first', 'error');
+    }
+    setClaiming(rewardId);
+    try {
+      const v = await api.wallet.issueVoucher(rewardId);
+      setVoucher(v);
+    } catch (err) { showToast(err.message || 'Failed to issue voucher', 'error'); }
+    finally { setClaiming(null); }
+  };
+
+  const handleConfirm = async () => {
+    if (!txHash.trim() || txHash.trim().length !== 64) {
+      return showToast('Enter the 64-character transaction hash', 'error');
+    }
+    setConfirming(true);
+    try {
+      const res = await api.wallet.confirmClaim({
+        reward_id: voucher.reward_id,
+        tx_hash: txHash.trim(),
+      });
+      showToast(`Claimed! ${res.confirmations} confirmation(s) on-chain.`);
+      setVoucher(null); setTxHash('');
+      const d = await api.wallet.getPendingRewards();
+      setRewards(d?.rewards || []);
+    } catch (err) { showToast(err.message || 'Failed to confirm claim', 'error'); }
+    finally { setConfirming(false); }
+  };
+
+  const copyToClipboard = (text) => {
+    navigator.clipboard?.writeText(text)
+      .then(() => showToast('Copied!'))
+      .catch(() => showToast('Copy failed', 'error'));
+  };
+
+  const unclaimed = rewards.filter(r => r.status === 'unclaimed');
+  const issued    = rewards.filter(r => r.status === 'voucher_issued');
+  const claimed   = rewards.filter(r => r.status === 'claimed');
+  const totalUnclaimed = unclaimed.reduce((s, r) => s + r.amount, 0);
+
+  if (loading) return null;
+  if (rewards.length === 0) return null;
+
+  return (
+    <div className="mb-5">
+      <div className="flex items-center justify-between mb-3">
+        <p className="font-black text-reads-navy text-sm uppercase tracking-wide">On-Chain Claims</p>
+        {totalUnclaimed > 0 && (
+          <span className="text-[10px] font-black bg-reads-green text-white px-2 py-1 rounded-full">
+            {totalUnclaimed.toLocaleString()} $READS ready
+          </span>
+        )}
+      </div>
+
+      {/* Active voucher modal */}
+      {voucher && (
+        <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/50 animate-fade-in">
+          <div className="w-full max-w-lg bg-white rounded-t-3xl px-5 py-6 space-y-4">
+            <div>
+              <p className="font-black text-reads-navy text-base">Voucher Issued ✓</p>
+              <p className="text-reads-muted text-xs mt-1">
+                Submit this voucher to the $READS Aiken smart contract to release your tokens.
+              </p>
+            </div>
+
+            {/* Voucher details */}
+            <div className="reads-card px-4 py-3 space-y-2 text-xs font-mono bg-gray-50">
+              {[
+                ['Reward ID', voucher.reward_id],
+                ['Amount', `${voucher.amount.toLocaleString()} $READS`],
+                ['Your Address', voucher.student_address?.slice(0, 20) + '...'],
+                ['Expires Slot', voucher.expires_slot?.toLocaleString()],
+              ].map(([label, val]) => (
+                <div key={label} className="flex justify-between gap-2">
+                  <span className="text-reads-muted">{label}</span>
+                  <span className="text-reads-navy font-bold truncate max-w-[160px]">{val}</span>
+                </div>
+              ))}
+            </div>
+
+            <button
+              onClick={() => copyToClipboard(JSON.stringify(voucher, null, 2))}
+              className="w-full reads-btn-secondary text-sm flex items-center justify-center gap-2">
+              <Copy size={14} /> Copy Full Voucher JSON
+            </button>
+
+            <div className="space-y-2">
+              <p className="text-reads-muted text-xs font-bold">After submitting to the contract, paste the tx hash:</p>
+              <input
+                className="reads-input font-mono text-sm"
+                placeholder="64-character transaction hash"
+                value={txHash}
+                onChange={e => setTxHash(e.target.value.trim())}
+                maxLength={64}
+              />
+              <div className="flex gap-2">
+                <button onClick={() => { setVoucher(null); setTxHash(''); }}
+                  className="flex-1 reads-btn-secondary text-sm">Cancel</button>
+                <button onClick={handleConfirm} disabled={confirming || txHash.length !== 64}
+                  className="flex-1 reads-btn-primary text-sm flex items-center justify-center gap-1">
+                  {confirming && <Loader2 size={14} className="animate-spin" />}
+                  Confirm Claim
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      <div className="space-y-2">
+        {/* Unclaimed rewards */}
+        {unclaimed.map(r => (
+          <div key={r.id} className="reads-card px-4 py-3 flex items-center gap-3">
+            <div className="w-10 h-10 rounded-2xl bg-reads-green-bg flex items-center justify-center flex-shrink-0">
+              <span className="font-black text-reads-green text-sm">{r.amount.toLocaleString()}</span>
+            </div>
+            <div className="flex-1 min-w-0">
+              <p className="font-bold text-reads-navy text-sm truncate">{r.description}</p>
+              <p className="text-reads-muted text-xs capitalize">{r.source}</p>
+            </div>
+            <button
+              onClick={() => handleIssueVoucher(r.id)}
+              disabled={claiming === r.id}
+              className="reads-btn-primary px-3 py-2 text-xs flex items-center gap-1 flex-shrink-0">
+              {claiming === r.id ? <Loader2 size={12} className="animate-spin" /> : null}
+              Claim
+            </button>
+          </div>
+        ))}
+
+        {/* Voucher issued (awaiting submission) */}
+        {issued.map(r => (
+          <div key={r.id} className="reads-card px-4 py-3 flex items-center gap-3 opacity-70">
+            <div className="w-10 h-10 rounded-2xl bg-amber-50 flex items-center justify-center flex-shrink-0">
+              <span className="font-black text-amber-500 text-sm">{r.amount.toLocaleString()}</span>
+            </div>
+            <div className="flex-1 min-w-0">
+              <p className="font-bold text-reads-navy text-sm truncate">{r.description}</p>
+              <p className="text-reads-muted text-xs">Voucher issued — submit to contract</p>
+            </div>
+            <span className="text-amber-500 text-[10px] font-black px-2 py-1 bg-amber-50 rounded-full flex-shrink-0">PENDING</span>
+          </div>
+        ))}
+
+        {/* Claimed */}
+        {claimed.slice(0, 3).map(r => (
+          <div key={r.id} className="reads-card px-4 py-3 flex items-center gap-3 opacity-50">
+            <div className="w-10 h-10 rounded-2xl bg-gray-100 flex items-center justify-center flex-shrink-0">
+              <CheckCircle size={18} className="text-reads-green" />
+            </div>
+            <div className="flex-1 min-w-0">
+              <p className="font-bold text-reads-navy text-sm truncate">{r.description}</p>
+              <p className="text-reads-muted text-xs font-mono truncate">{r.claim_tx_hash?.slice(0, 16)}...</p>
+            </div>
+            <span className="text-reads-green text-[10px] font-black px-2 py-1 bg-green-50 rounded-full flex-shrink-0">CLAIMED</span>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+};
+
+
 export default function WalletModule({ balance: initialBalance, onUpdateBalance }) {
   const [balance, setBalance]           = useState(initialBalance ?? 0);
   const [transactions, setTransactions] = useState([]);
@@ -437,6 +617,12 @@ export default function WalletModule({ balance: initialBalance, onUpdateBalance 
         linkedAddress={cardanoAddress}
         onLinked={(addr) => setCardano(addr)}
         onUnlinked={() => setCardano('')}
+        showToast={showToast}
+      />
+
+      {/* On-chain claim section */}
+      <ClaimSection
+        linkedAddress={cardanoAddress}
         showToast={showToast}
       />
 
