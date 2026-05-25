@@ -59,7 +59,8 @@ function QuizView({ lessonId, lessonTitle, quizCount, tokenReward, timeLimitSecs
     const timeTaken = Math.floor((Date.now() - startTimeRef.current) / 1000);
     const formatted = questions.map((q) => ({
       question_id: q.id,
-      selected: answers[q.id] ?? null,
+      selected: answers[q.id]?.index ?? null,      // legacy fallback
+      selected_text: answers[q.id]?.text ?? null,  // shuffle-safe grading
     }));
     try {
       const res = await api.lessons.submitQuiz(lessonId, {
@@ -79,6 +80,25 @@ function QuizView({ lessonId, lessonTitle, quizCount, tokenReward, timeLimitSecs
 
   if (state === 'loading') return <LoadingOverlay message="Loading quiz…" />;
 
+  // Show dedicated loading screen while waiting for server score
+  if (state === 'submitting') return (
+    <div className="flex flex-col items-center justify-center min-h-[60vh] gap-5 px-4">
+      <div className="w-20 h-20 rounded-3xl bg-reads-green-bg flex items-center justify-center animate-pulse">
+        <span className="text-3xl">📊</span>
+      </div>
+      <div className="text-center space-y-2">
+        <p className="font-black text-reads-navy text-xl">Calculating Score…</p>
+        <p className="text-reads-muted text-sm">Checking your answers, please wait</p>
+      </div>
+      <div className="flex gap-1.5 mt-2">
+        {[0,1,2].map(i => (
+          <div key={i} className="w-2 h-2 rounded-full bg-reads-green animate-bounce"
+            style={{animationDelay: `${i * 0.15}s`}} />
+        ))}
+      </div>
+    </div>
+  );
+
   if (state === 'error') return (
     <div className="px-4 pt-10 flex flex-col items-center gap-4">
       <XCircle size={40} className="text-reads-red" />
@@ -87,7 +107,7 @@ function QuizView({ lessonId, lessonTitle, quizCount, tokenReward, timeLimitSecs
     </div>
   );
 
-  if (state === 'result' || state === 'submitting') {
+  if (state === 'result') {
     const score    = result?.score ?? 0;
     const total    = result?.total ?? questions.length;
     const earned   = result?.tokens_earned ?? 0;
@@ -253,11 +273,11 @@ function QuizView({ lessonId, lessonTitle, quizCount, tokenReward, timeLimitSecs
       <div className="space-y-3 flex-1">
         {q.options?.map((opt, i) => {
           const letter = ['A', 'B', 'C', 'D'][i];
-          const selected = answers[q.id] === i;
+          const selected = answers[q.id]?.index === i;
           return (
             <button
               key={i}
-              onClick={() => setAnswers((a) => ({ ...a, [q.id]: i }))}
+              onClick={() => setAnswers((a) => ({ ...a, [q.id]: { index: i, text: opt } }))}
               className={`w-full flex items-center gap-3 p-4 rounded-2xl border-2 text-left transition-all active:scale-98 ${
                 selected
                   ? 'border-reads-green bg-reads-green-bg'
