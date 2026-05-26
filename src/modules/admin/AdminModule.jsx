@@ -241,10 +241,15 @@ function LessonsSection() {
   const [editForm, setEditForm] = useState({});
   const [editSaving, setEditSaving] = useState(false);
   const [toast, setToast] = useState(null);
+  const [schools, setSchools] = useState([]);
 
   const showToast = (msg, type = 'success') => {
     setToast({ msg, type }); setTimeout(() => setToast(null), 3000);
   };
+
+  useEffect(() => {
+    api.admin.getSchools().then(d => setSchools(d?.schools || [])).catch(() => {});
+  }, []);
 
   const loadLessons = () => {
     Promise.all([
