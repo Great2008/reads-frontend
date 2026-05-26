@@ -330,6 +330,8 @@ export const wallet = {
   verifyPayment: (data) => post('/wallet/verify-payment', data),
   txConfirmations: (txHash) => get(`/wallet/tx-confirmations/${txHash}`),
   tokenInfo: () => get('/wallet/token-info'),
+  buildClaimTx: (data) => post('/wallet/rewards/build-claim-tx', data),
+  submitClaimTx: (data) => post('/wallet/rewards/submit-claim-tx', data),
 };
 
 // ── Marketplace ───────────────────────────────────────────────────────────────
