@@ -12,6 +12,7 @@ import WelcomePage          from './modules/welcome/WelcomePage.jsx';
 import AuthModule           from './modules/auth/AuthModule.jsx';
 import ResetPasswordPage    from './modules/auth/ResetPasswordPage.jsx';
 import AcceptInvitePage     from './modules/auth/AcceptInvitePage.jsx';
+import ClaimPage           from './modules/wallet/ClaimPage.jsx';
 import LoadingScreen        from './components/LoadingScreen.jsx';
 import Dashboard            from './modules/dashboard/Dashboard.jsx';
 import LearnModule          from './modules/learn/LearnModule.jsx';
@@ -201,6 +202,7 @@ export default function App() {
   const path = window.location.pathname;
   const isPasswordReset = path === '/reset-password';
   const isStaffInvite   = path === '/accept-invite';
+  const isClaimPage     = path === '/claim';
 
   const navigate = (newView) => setView(newView);
 
@@ -306,6 +308,7 @@ export default function App() {
   // ── Special routes ──────────────────────────────────────────────────────────
   if (isStaffInvite)   return <AcceptInvitePage />;
   if (isPasswordReset) return <ResetPasswordPage />;
+  if (isClaimPage)     return <ClaimPage />;
   if (isLoading)       return <LoadingScreen />;
 
   // ── Unauthenticated ─────────────────────────────────────────────────────────

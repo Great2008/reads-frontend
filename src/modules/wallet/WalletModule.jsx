@@ -354,6 +354,18 @@ const ClaimSection = ({ linkedAddress, showToast }) => {
     finally { setClaiming(null); }
   };
 
+  // ── Generate claim URL for Eternl DApp browser ──────────────
+  const getClaimUrl = () => {
+    if (!voucher) return '';
+    const encoded = encodeURIComponent(JSON.stringify(voucher));
+    return `${window.location.origin}/claim?voucher=${encoded}`;
+  };
+
+  const copyClaimUrl = () => {
+    navigator.clipboard.writeText(getClaimUrl());
+    showToast('Claim URL copied! Open it in Eternl DApp browser');
+  };
+
   // ── CIP-30 dApp claim submission ────────────────────────────
   const handleDAppClaim = async () => {
     if (!voucher) return;
@@ -362,7 +374,9 @@ const ClaimSection = ({ linkedAddress, showToast }) => {
     const WALLETS = ['eternl', 'nami', 'typhon', 'vespr', 'flint'];
     const walletName = WALLETS.find(w => window.cardano?.[w]);
     if (!walletName) {
-      return showToast('No Cardano wallet detected. Install Eternl or Nami.', 'error');
+      // No wallet — show the Eternl browser instructions
+      setClaimStep('no_wallet');
+      return;
     }
 
     setSubmitting(true);
@@ -434,6 +448,7 @@ const ClaimSection = ({ linkedAddress, showToast }) => {
     signing:   'Waiting for Signature…',
     submitted: 'Submitting to Chain…',
     confirmed: 'Confirmed! 🎉',
+    no_wallet: 'Open in Eternl Browser',
   };
 
   return (
@@ -486,21 +501,49 @@ const ClaimSection = ({ linkedAddress, showToast }) => {
               </div>
             )}
 
-            {/* Main CTA */}
-            <button
-              onClick={handleDAppClaim}
-              disabled={submitting || claimStep === 'confirmed'}
-              className="reads-btn-primary w-full flex items-center justify-center gap-2 py-4 text-base"
-            >
-              {submitting
-                ? <Loader2 size={18} className="animate-spin" />
-                : <span>₳</span>}
-              {submitting ? stepLabel[claimStep] : 'Sign & Claim with Eternl'}
-            </button>
+            {/* No wallet instructions */}
+            {claimStep === 'no_wallet' && (
+              <div className="bg-blue-50 rounded-2xl p-4 space-y-3">
+                <p className="font-bold text-reads-navy text-sm">Open in Eternl Browser</p>
+                <p className="text-reads-muted text-xs leading-relaxed">
+                  No wallet detected here. To claim on mobile:
+                </p>
+                <ol className="text-xs text-reads-muted space-y-1.5 list-decimal list-inside">
+                  <li>Copy the claim URL below</li>
+                  <li>Open <strong>Eternl mobile</strong> app</li>
+                  <li>Tap the <strong>DApp Browser</strong> tab</li>
+                  <li>Paste the URL and open it</li>
+                  <li>Tap Sign & Claim inside Eternl</li>
+                </ol>
+                <button onClick={copyClaimUrl}
+                  className="w-full flex items-center justify-center gap-2 bg-reads-navy text-white font-bold text-sm py-3 rounded-2xl active:scale-95 transition-transform">
+                  <Copy size={14} /> Copy Claim URL
+                </button>
+                <button onClick={() => setClaimStep('idle')}
+                  className="w-full text-reads-muted text-xs text-center">
+                  ← Back
+                </button>
+              </div>
+            )}
 
-            <p className="text-reads-muted text-[10px] text-center">
-              Your Cardano wallet will open to sign. No seed phrase needed.
-            </p>
+            {/* Main CTA */}
+            {claimStep !== 'no_wallet' && (
+              <>
+                <button
+                  onClick={handleDAppClaim}
+                  disabled={submitting || claimStep === 'confirmed'}
+                  className="reads-btn-primary w-full flex items-center justify-center gap-2 py-4 text-base"
+                >
+                  {submitting
+                    ? <Loader2 size={18} className="animate-spin" />
+                    : <span>₳</span>}
+                  {submitting ? stepLabel[claimStep] : 'Sign & Claim with Eternl'}
+                </button>
+                <p className="text-reads-muted text-[10px] text-center">
+                  Your Cardano wallet will open to sign. No seed phrase needed.
+                </p>
+              </>
+            )}
           </div>
         </div>
       )}
