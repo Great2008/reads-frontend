@@ -152,7 +152,7 @@ export default function Dashboard({ user, wallet, onNavigate }) {
           <QuickAction icon={BookOpen} label="Learn" onClick={() => onNavigate('learn')} bg="bg-reads-green-bg" iconColor="text-reads-green" />
           <QuickAction icon={GraduationCap} label="Exams" onClick={() => onNavigate('exams')} bg="bg-reads-navy/10" iconColor="text-reads-navy" />
           <QuickAction icon={Star} label="AI Tutor" onClick={() => onNavigate('ai-tutor')} bg="bg-purple-50" iconColor="text-purple-600" />
-          <QuickAction icon={TrendingUp} label="Compete" onClick={() => onNavigate('challenges')} bg="bg-reads-gold/10" iconColor="text-reads-gold-dark" />
+          <QuickAction icon={TrendingUp} label="Compete" onClick={() => onNavigate('challenge')} bg="bg-reads-gold/10" iconColor="text-reads-gold-dark" />
         </div>
       </div>
 
