@@ -141,6 +141,37 @@ export default function ClaimPage() {
   const walletDetected = detectWallet();
   const isProcessing   = ['connecting', 'signing', 'submitting'].includes(step);
 
+  // ── Embedded login state ───────────────────────────────────
+  const [loginEmail, setLoginEmail]       = useState('');
+  const [loginPassword, setLoginPassword] = useState('');
+  const [loginLoading, setLoginLoading]   = useState(false);
+  const [loginError, setLoginError]       = useState('');
+
+  const handleLogin = async () => {
+    if (!loginEmail || !loginPassword) {
+      setLoginError('Enter your email and password.');
+      return;
+    }
+    setLoginLoading(true);
+    setLoginError('');
+    try {
+      const res = await fetch('/api/auth/login', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email: loginEmail, password: loginPassword }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.detail || 'Login failed');
+      localStorage.setItem('access_token', data.access_token);
+      setNeedsLogin(false);
+      setStep('ready');
+    } catch (e) {
+      setLoginError(e.message || 'Login failed');
+    } finally {
+      setLoginLoading(false);
+    }
+  };
+
   // ── Render ──────────────────────────────────────────────────
   return (
     <div className="min-h-screen bg-gray-50 flex flex-col items-center justify-center px-4 py-10">
@@ -187,12 +218,47 @@ export default function ClaimPage() {
               ))}
             </div>
 
-            {/* Login warning */}
+            {/* Embedded login */}
             {needsLogin && (
-              <div className="bg-amber-50 border border-amber-200 rounded-2xl p-3">
-                <p className="text-amber-700 text-xs font-semibold">
-                  You need to be logged in to $READS to claim. Please log in first then come back to this page.
-                </p>
+              <div className="space-y-3">
+                <div className="bg-amber-50 border border-amber-100 rounded-2xl px-4 py-3">
+                  <p className="text-amber-700 text-xs font-semibold">
+                    Log in to $READS to claim your tokens
+                  </p>
+                </div>
+                <div className="space-y-2">
+                  <input
+                    type="email"
+                    placeholder="Email address"
+                    value={loginEmail}
+                    onChange={e => setLoginEmail(e.target.value)}
+                    className="w-full border border-gray-200 rounded-2xl px-4 py-3 text-sm outline-none focus:border-reads-green transition-colors"
+                  />
+                  <input
+                    type="password"
+                    placeholder="Password"
+                    value={loginPassword}
+                    onChange={e => setLoginPassword(e.target.value)}
+                    onKeyDown={e => e.key === 'Enter' && handleLogin()}
+                    className="w-full border border-gray-200 rounded-2xl px-4 py-3 text-sm outline-none focus:border-reads-green transition-colors"
+                  />
+                  {loginError && (
+                    <p className="text-red-500 text-xs px-1">{loginError}</p>
+                  )}
+                  <button
+                    onClick={handleLogin}
+                    disabled={loginLoading}
+                    className="w-full bg-reads-navy text-white font-bold text-sm py-3.5 rounded-2xl flex items-center justify-center gap-2 active:scale-95 transition-transform"
+                  >
+                    {loginLoading
+                      ? <svg className="animate-spin w-4 h-4" viewBox="0 0 24 24" fill="none">
+                          <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/>
+                          <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8z"/>
+                        </svg>
+                      : null}
+                    {loginLoading ? 'Logging in…' : 'Log In & Continue'}
+                  </button>
+                </div>
               </div>
             )}
 
