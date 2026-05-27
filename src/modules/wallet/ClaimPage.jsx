@@ -47,8 +47,14 @@ export default function ClaimPage() {
       }
       setVoucher(v);
 
+      // Extract token from URL if present (passed from main app)
+      const urlToken = params.get('token');
+      if (urlToken) {
+        localStorage.setItem('access_token', decodeURIComponent(urlToken));
+      }
+
       // Check if logged in
-      const token = localStorage.getItem('access_token');
+      const token = urlToken || localStorage.getItem('access_token');
       if (!token) {
         setNeedsLogin(true);
         setStep('ready');

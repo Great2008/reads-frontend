@@ -358,7 +358,9 @@ const ClaimSection = ({ linkedAddress, showToast }) => {
   const getClaimUrl = () => {
     if (!voucher) return '';
     const encoded = encodeURIComponent(JSON.stringify(voucher));
-    return `${window.location.origin}/claim?voucher=${encoded}`;
+    const token = localStorage.getItem('access_token') || '';
+    const tokenParam = token ? `&token=${encodeURIComponent(token)}` : '';
+    return `${window.location.origin}/claim?voucher=${encoded}${tokenParam}`;
   };
 
   const copyClaimUrl = () => {
