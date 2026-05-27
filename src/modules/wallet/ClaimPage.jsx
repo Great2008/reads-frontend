@@ -90,7 +90,7 @@ export default function ClaimPage() {
       setStep('signing');
       const txData = await api.wallet.buildClaimTx({
         reward_id: voucher.reward_id,
-        student_address: studentAddress || voucher.student_address,
+        student_address: changeAddrHex || voucher.student_address,  // send raw hex, backend decodes
         amount: voucher.amount,
         expires_slot: voucher.expires_slot,
         platform_signature: voucher.platform_signature,
