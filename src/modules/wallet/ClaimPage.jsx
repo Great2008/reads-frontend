@@ -7,6 +7,8 @@ import { useState, useEffect } from 'react';
 import { Loader2, CheckCircle, XCircle, ExternalLink, Copy } from 'lucide-react';
 import { api } from '../../services/api.js';
 
+const API_URL = (import.meta.env.VITE_API_URL || '') + '/api';
+
 const WALLETS = ['eternl', 'nami', 'typhon', 'vespr', 'flint'];
 
 const STEPS = {
@@ -155,7 +157,7 @@ export default function ClaimPage() {
     setLoginLoading(true);
     setLoginError('');
     try {
-      const res = await fetch('/api/auth/login', {
+      const res = await fetch(`${API_URL}/auth/login`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ email: loginEmail, password: loginPassword }),
