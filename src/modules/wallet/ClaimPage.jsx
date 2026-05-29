@@ -124,7 +124,12 @@ export default function ClaimPage() {
 
     } catch (err) {
       const msg = err?.message || 'Unknown error';
-      if (msg.toLowerCase().includes('cancel') || msg.toLowerCase().includes('declined')) {
+      if (msg === 'SESSION_EXPIRED' || msg.includes('SESSION_EXPIRED')) {
+        // Token expired — show embedded login form
+        localStorage.removeItem('access_token');
+        setNeedsLogin(true);
+        setStep('ready');
+      } else if (msg.toLowerCase().includes('cancel') || msg.toLowerCase().includes('declined')) {
         setError('Transaction cancelled. You can try again.');
         setStep('ready');
       } else {
@@ -171,7 +176,10 @@ export default function ClaimPage() {
       const data = await res.json();
       if (!res.ok) throw new Error(data.detail || 'Login failed');
       localStorage.setItem('access_token', data.access_token);
+      if (data.refresh_token) localStorage.setItem('refresh_token', data.refresh_token);
       setNeedsLogin(false);
+      setLoginEmail('');
+      setLoginPassword('');
       setStep('ready');
     } catch (e) {
       setLoginError(e.message || 'Login failed');
