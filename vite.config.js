@@ -4,8 +4,25 @@ import wasm from 'vite-plugin-wasm';
 import topLevelAwait from 'vite-plugin-top-level-await';
 import { VitePWA } from 'vite-plugin-pwa';
 
+// libsodium-wrappers-sumo ships an ESM build that uses a relative dynamic
+// import for its WASM file ("./libsodium-sumo.mjs") which Rollup cannot
+// resolve at build time. This plugin rewrites any import of the ESM entry
+// to the CJS build, which Vite wraps correctly without the broken relative ref.
+function libsodiumCjsPlugin() {
+  return {
+    name: 'libsodium-cjs-redirect',
+    enforce: 'pre',
+    resolveId(id) {
+      if (id === 'libsodium-wrappers-sumo') {
+        return { id: 'libsodium-wrappers-sumo/dist/modules-sumo/libsodium-wrappers-sumo.js', external: false };
+      }
+    },
+  };
+}
+
 export default defineConfig({
   plugins: [
+    libsodiumCjsPlugin(),
     react(),
     wasm(),
     topLevelAwait(),
@@ -13,8 +30,6 @@ export default defineConfig({
       registerType: 'autoUpdate',
       includeAssets: ['favicon.ico', 'apple-touch-icon.png', 'pwa-192x192.png', 'pwa-512x512.png'],
       workbox: {
-        // Mesh + CSL bundle exceeds the default 2 MiB Workbox limit.
-        // Raise to 6 MiB to cover the ~3.8 MB JS chunk and the ~5.4 MB WASM.
         maximumFileSizeToCacheInBytes: 6 * 1024 * 1024,
         globPatterns: ['**/*.{js,css,html,ico,png,svg,woff2}'],
         globIgnores: ['**/*.wasm', 'sw.js', 'workbox-*.js'],
@@ -61,8 +76,8 @@ export default defineConfig({
     chunkSizeWarningLimit: 6000,
     rollupOptions: {
       external: [
-        // Node built-ins only — do NOT add npm packages here or the
-        // browser will receive unresolvable bare specifiers at runtime.
+        // Node built-ins only — npm packages must NOT be here or the
+        // browser receives unresolvable bare specifiers at runtime.
         'crypto',
         'stream',
         'events',
@@ -74,8 +89,6 @@ export default defineConfig({
     },
   },
 
-  // Do NOT exclude Mesh or libsodium — Vite must bundle them so the
-  // browser gets proper hashed URLs instead of bare specifiers.
   optimizeDeps: {
     exclude: [],
   },
