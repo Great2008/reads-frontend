@@ -108,7 +108,23 @@ export default function ClaimPage() {
       }
 
       // 4. Sign with wallet
-      const witnessSet = await walletApi.signTx(txData.tx_cbor, true);
+      // partialSign=true because the tx has no vkey witnesses yet (backend builds unsigned).
+      // The wallet (Eternl/CSL) parses the tx_cbor before showing the signing dialog —
+      // any CBOR issue will throw here with a deserialization message.
+      let witnessSet;
+      try {
+        witnessSet = await walletApi.signTx(txData.tx_cbor, true);
+      } catch (signErr) {
+        // CIP-30 wallets throw either a string, a TxSignError object {code, info},
+        // or a plain Error. Normalise to a readable message.
+        const info = signErr?.info || signErr?.message || String(signErr);
+        if (info.toLowerCase().includes('cancel') || info.toLowerCase().includes('declined') || signErr?.code === 2) {
+          setError('Transaction cancelled. You can try again.');
+          setStep('ready');
+          return;
+        }
+        throw new Error(`Wallet signing failed: ${info}`);
+      }
 
       // 5. Submit
       setStep('submitting');
