@@ -61,7 +61,8 @@ export default defineConfig({
     chunkSizeWarningLimit: 6000,
     rollupOptions: {
       external: [
-        'libsodium-wrappers-sumo',
+        // Node built-ins only — do NOT add npm packages here or the
+        // browser will receive unresolvable bare specifiers at runtime.
         'crypto',
         'stream',
         'events',
@@ -73,8 +74,10 @@ export default defineConfig({
     },
   },
 
+  // Do NOT exclude Mesh or libsodium — Vite must bundle them so the
+  // browser gets proper hashed URLs instead of bare specifiers.
   optimizeDeps: {
-    exclude: ['@meshsdk/core', '@meshsdk/react', 'libsodium-wrappers-sumo'],
+    exclude: [],
   },
 
   resolve: {
