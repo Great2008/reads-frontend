@@ -58,6 +58,14 @@ export default defineConfig({
     },
   },
 
+  define: {
+    // Some Cardano/Mesh deps reference Node globals — polyfill them for browser
+    global: 'globalThis',
+    'process.env': '{}',
+    'process.version': '"v18.0.0"',
+    'process.browser': 'true',
+  },
+
   build: {
     target: 'esnext',
     chunkSizeWarningLimit: 6000,
