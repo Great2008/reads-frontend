@@ -414,25 +414,25 @@ export default function ClaimPage() {
                   : 'Wallet Required'}
               </button>
             )}
+          {/* ── Debug Panel ─────────────────────────────── */}
+          <div className="mt-3">
+            <button
+              onClick={() => setShowDebug(v => !v)}
+              className="w-full text-xs text-reads-muted font-mono py-1.5 border border-dashed border-gray-300 rounded-xl"
+            >
+              {showDebug ? '▲ Hide Debug Log' : '▼ Show Debug Log'} ({debugLog.length})
+            </button>
+            {showDebug && (
+              <div className="mt-2 bg-gray-950 text-green-400 font-mono text-xs rounded-xl p-3 max-h-64 overflow-y-auto space-y-1 text-left">
+                {debugLog.length === 0
+                  ? <p className="text-gray-500">No entries yet — press Sign &amp; Claim to start.</p>
+                  : debugLog.map((e, i) => <pre key={i} className="whitespace-pre-wrap break-all">{e}</pre>)
+                }
+              </div>
+            )}
+          </div>
           </>
 
-        {/* ── Debug Panel ─────────────────────────────── */}
-        <div className="mt-3">
-          <button
-            onClick={() => setShowDebug(v => !v)}
-            className="w-full text-xs text-reads-muted font-mono py-1.5 border border-dashed border-gray-300 rounded-xl"
-          >
-            {showDebug ? '▲ Hide Debug Log' : '▼ Show Debug Log'} ({debugLog.length})
-          </button>
-          {showDebug && (
-            <div className="mt-2 bg-gray-950 text-green-400 font-mono text-xs rounded-xl p-3 max-h-64 overflow-y-auto space-y-1 text-left">
-              {debugLog.length === 0
-                ? <p className="text-gray-500">No entries yet — press Sign &amp; Claim to start.</p>
-                : debugLog.map((e, i) => <pre key={i} className="whitespace-pre-wrap break-all">{e}</pre>)
-              }
-            </div>
-          )}
-        </div>
         )}
 
         {/* Processing */}
