@@ -125,10 +125,8 @@ const CardanoSection = ({ linkedAddress, onLinked, onUnlinked, showToast }) => {
     try {
       const walletApi = await window.cardano[walletName].enable();
       const changeAddrHex = await walletApi.getChangeAddress();
-      // CIP-30 returns hex-encoded CBOR. We use the used addresses to get bech32.
       const usedAddrs = await walletApi.getUsedAddresses();
       const address = usedAddrs.length > 0 ? usedAddrs[0] : changeAddrHex;
-      // Try to get bech32 via getRewardAddresses or use raw hex — backend accepts both
       await api.wallet.linkCardano(address);
       onLinked(address);
       showToast(`${walletName} wallet connected!`);
@@ -326,15 +324,13 @@ const CardanoSection = ({ linkedAddress, onLinked, onUnlinked, showToast }) => {
   );
 };
 
-// ── Main Wallet Module ────────────────────────────────────────────────────────
 // ── On-Chain Claim Section ────────────────────────────────────────────────────
 const ClaimSection = ({ linkedAddress, showToast }) => {
-  const [rewards, setRewards]         = useState([]);
-  const [loading, setLoading]         = useState(true);
-  const [voucher, setVoucher]         = useState(null);
-  const [claiming, setClaiming]       = useState(null);
-  const [submitting, setSubmitting]   = useState(false);
-  const [claimStep, setClaimStep]     = useState('idle'); // idle | signing | submitted | confirmed
+  const [rewards, setRewards]     = useState([]);
+  const [loading, setLoading]     = useState(true);
+  const [claiming, setClaiming]   = useState(null); // reward id being voucher-issued
+  const [voucher, setVoucher]     = useState(null); // active voucher sheet
+  const [copied, setCopied]       = useState(false);
 
   useEffect(() => {
     api.wallet.getPendingRewards()
@@ -343,115 +339,72 @@ const ClaimSection = ({ linkedAddress, showToast }) => {
       .finally(() => setLoading(false));
   }, []);
 
+  // Step 1: issue voucher from backend (signs the claim params)
   const handleIssueVoucher = async (rewardId) => {
     if (!linkedAddress) return showToast('Link a Cardano wallet first', 'error');
     setClaiming(rewardId);
     try {
       const v = await api.wallet.issueVoucher(rewardId);
       setVoucher(v);
-      setClaimStep('idle');
-    } catch (err) { showToast(err.message || 'Failed to issue voucher', 'error'); }
-    finally { setClaiming(null); }
+    } catch (err) {
+      showToast(err.message || 'Failed to issue voucher', 'error');
+    } finally {
+      setClaiming(null);
+    }
   };
 
-  // ── Generate claim URL for Eternl DApp browser ──────────────
+  // Step 2: build the /claim URL and open it
+  // The URL carries the full signed voucher + the user's JWT so ClaimPage
+  // can authenticate inside the Eternl DApp browser without a login screen.
   const getClaimUrl = () => {
     if (!voucher) return '';
-    const encoded = encodeURIComponent(JSON.stringify(voucher));
-    const token = localStorage.getItem('access_token') || '';
-    const tokenParam = token ? `&token=${encodeURIComponent(token)}` : '';
-    return `${window.location.origin}/claim?voucher=${encoded}${tokenParam}`;
+    const voucherPayload = {
+      reward_id:          voucher.reward_id,
+      amount:             voucher.amount,
+      expires_slot:       voucher.expires_slot,
+      platform_signature: voucher.platform_signature,
+      platform_vkey:      voucher.platform_vkey,
+      description:        voucher.description || '',
+    };
+    const encoded = encodeURIComponent(JSON.stringify(voucherPayload));
+    const token   = encodeURIComponent(localStorage.getItem('access_token') || '');
+    return `${window.location.origin}/claim?voucher=${encoded}&token=${token}`;
   };
 
+  // Open directly (works on desktop browser with wallet extension)
+  const openClaimPage = () => {
+    const url = getClaimUrl();
+    if (url) window.open(url, '_blank');
+  };
+
+  // Copy URL for pasting into Eternl DApp browser on mobile
   const copyClaimUrl = () => {
-    navigator.clipboard.writeText(getClaimUrl());
-    showToast('Claim URL copied! Open it in Eternl DApp browser');
+    const url = getClaimUrl();
+    if (!url) return;
+    navigator.clipboard.writeText(url).then(() => {
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2500);
+      showToast('Claim URL copied — paste it in Eternl DApp Browser');
+    });
   };
 
-  // ── CIP-30 dApp claim submission ────────────────────────────
-  const handleDAppClaim = async () => {
-    if (!voucher) return;
-
-    // 1. Detect wallet
-    const WALLETS = ['eternl', 'nami', 'typhon', 'vespr', 'flint'];
-    const walletName = WALLETS.find(w => window.cardano?.[w]);
-    if (!walletName) {
-      // No wallet — show the Eternl browser instructions
-      setClaimStep('no_wallet');
-      return;
-    }
-
-    setSubmitting(true);
-    setClaimStep('signing');
-
+  // After claim confirmed on /claim page, refresh rewards list
+  const refreshRewards = async () => {
     try {
-      // 2. Enable wallet
-      const walletApi = await window.cardano[walletName].enable();
-
-      // 3. Build the claim transaction CBOR
-      // We call our backend to build the tx — backend knows the contract UTXO
-      const txRes = await api.wallet.buildClaimTx({
-        reward_id: voucher.reward_id,
-        student_address: voucher.student_address,
-        amount: voucher.amount,
-        expires_slot: voucher.expires_slot,
-        platform_signature: voucher.platform_signature,
-        platform_vkey: voucher.platform_vkey,
-      });
-
-      if (!txRes?.tx_cbor) throw new Error('Failed to build transaction');
-
-      // 4. Sign with student wallet (CIP-30)
-      const witnessSet = await walletApi.signTx(txRes.tx_cbor, true);
-
-      // 5. Assemble and submit via backend
-      setClaimStep('submitted');
-      const submitRes = await api.wallet.submitClaimTx({
-        reward_id: voucher.reward_id,
-        tx_cbor: txRes.tx_cbor,
-        witness_set: witnessSet,
-        student_address: voucher.student_address,
-      });
-
-      setClaimStep('confirmed');
-      showToast(`🎉 ${voucher.amount} $READS claimed on-chain!`);
-
-      // 6. Refresh rewards list
-      setTimeout(async () => {
-        const d = await api.wallet.getPendingRewards();
-        setRewards(d?.rewards || []);
-        setVoucher(null);
-        setClaimStep('idle');
-      }, 2000);
-
-    } catch (err) {
-      const msg = err?.message || 'Claim failed';
-      if (msg.includes('user declined') || msg.includes('cancel')) {
-        showToast('Transaction cancelled', 'error');
-      } else {
-        showToast(msg, 'error');
-      }
-      setClaimStep('idle');
-    } finally {
-      setSubmitting(false);
-    }
+      const d = await api.wallet.getPendingRewards();
+      setRewards(d?.rewards || []);
+    } catch (_) {}
   };
 
-  const unclaimed     = rewards.filter(r => r.status === 'unclaimed');
-  const issued        = rewards.filter(r => r.status === 'voucher_issued');
-  const claimed       = rewards.filter(r => r.status === 'claimed');
+  const unclaimed      = rewards.filter(r => r.status === 'unclaimed');
+  const issued         = rewards.filter(r => r.status === 'voucher_issued');
+  const claimed        = rewards.filter(r => r.status === 'claimed');
   const totalUnclaimed = unclaimed.reduce((s, r) => s + r.amount, 0);
 
   if (loading) return null;
   if (rewards.length === 0) return null;
 
-  const stepLabel = {
-    idle:      'Claim to Wallet',
-    signing:   'Waiting for Signature…',
-    submitted: 'Submitting to Chain…',
-    confirmed: 'Confirmed! 🎉',
-    no_wallet: 'Open in Eternl Browser',
-  };
+  const walletDetected = SUPPORTED_WALLETS.find(w => window.cardano?.[w]);
 
   return (
     <div className="mb-5">
@@ -464,7 +417,7 @@ const ClaimSection = ({ linkedAddress, showToast }) => {
         )}
       </div>
 
-      {/* Active voucher modal */}
+      {/* ── Active voucher bottom sheet ─────────────────────────── */}
       {voucher && (
         <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/50 animate-fade-in">
           <div className="w-full max-w-lg bg-white rounded-t-3xl px-5 py-6 space-y-4">
@@ -472,21 +425,26 @@ const ClaimSection = ({ linkedAddress, showToast }) => {
             {/* Header */}
             <div className="flex items-center justify-between">
               <div>
-                <p className="font-black text-reads-navy text-base">Claim {voucher.amount} $READS</p>
+                <p className="font-black text-reads-navy text-base">
+                  Claim {voucher.amount?.toLocaleString()} $READS
+                </p>
                 <p className="text-reads-muted text-xs mt-0.5">{voucher.description}</p>
               </div>
-              <button onClick={() => { setVoucher(null); setClaimStep('idle'); }}
-                className="w-8 h-8 rounded-full bg-gray-100 flex items-center justify-center">
+              <button
+                onClick={() => { setVoucher(null); setCopied(false); }}
+                className="w-8 h-8 rounded-full bg-gray-100 flex items-center justify-center"
+              >
                 <span className="text-reads-muted text-sm">✕</span>
               </button>
             </div>
 
             {/* Voucher details */}
-            <div className="reads-card px-4 py-3 space-y-2 text-xs bg-gray-50">
+            <div className="bg-gray-50 rounded-2xl px-4 py-3 space-y-2 text-xs">
               {[
-                ['Amount', `${voucher.amount.toLocaleString()} $READS`],
-                ['To', linkedAddress?.slice(0, 16) + '…'],
+                ['Amount',  `${voucher.amount?.toLocaleString()} $READS`],
+                ['To',      `${linkedAddress?.slice(0, 16)}…`],
                 ['Expires', `Slot ${voucher.expires_slot?.toLocaleString()}`],
+                ['Network', 'Cardano Preprod'],
               ].map(([label, val]) => (
                 <div key={label} className="flex justify-between gap-2">
                   <span className="text-reads-muted">{label}</span>
@@ -495,63 +453,51 @@ const ClaimSection = ({ linkedAddress, showToast }) => {
               ))}
             </div>
 
-            {/* Step indicator */}
-            {claimStep !== 'idle' && (
-              <div className="flex items-center gap-3 bg-reads-green-bg rounded-2xl px-4 py-3">
-                <Loader2 size={16} className={`text-reads-green ${claimStep === 'confirmed' ? '' : 'animate-spin'}`} />
-                <p className="text-reads-green font-bold text-sm">{stepLabel[claimStep]}</p>
-              </div>
-            )}
+            {/* How-to instructions */}
+            <div className="bg-blue-50 rounded-2xl px-4 py-3 space-y-1.5">
+              <p className="font-bold text-reads-navy text-xs">How to claim</p>
+              <ol className="text-xs text-reads-muted space-y-1 list-decimal list-inside leading-relaxed">
+                <li>Tap <strong>Open Claim Page</strong> below</li>
+                <li>If on <strong>mobile</strong>, copy the URL instead and open it in <strong>Eternl → DApp Browser</strong></li>
+                <li>Tap <strong>Sign & Claim</strong> on the page that opens</li>
+                <li>Approve the transaction in your wallet</li>
+              </ol>
+            </div>
 
-            {/* No wallet instructions */}
-            {claimStep === 'no_wallet' && (
-              <div className="bg-blue-50 rounded-2xl p-4 space-y-3">
-                <p className="font-bold text-reads-navy text-sm">Open in Eternl Browser</p>
-                <p className="text-reads-muted text-xs leading-relaxed">
-                  No wallet detected here. To claim on mobile:
-                </p>
-                <ol className="text-xs text-reads-muted space-y-1.5 list-decimal list-inside">
-                  <li>Copy the claim URL below</li>
-                  <li>Open <strong>Eternl mobile</strong> app</li>
-                  <li>Tap the <strong>DApp Browser</strong> tab</li>
-                  <li>Paste the URL and open it</li>
-                  <li>Tap Sign & Claim inside Eternl</li>
-                </ol>
-                <button onClick={copyClaimUrl}
-                  className="w-full flex items-center justify-center gap-2 bg-reads-navy text-white font-bold text-sm py-3 rounded-2xl active:scale-95 transition-transform">
-                  <Copy size={14} /> Copy Claim URL
-                </button>
-                <button onClick={() => setClaimStep('idle')}
-                  className="w-full text-reads-muted text-xs text-center">
-                  ← Back
-                </button>
-              </div>
-            )}
+            {/* Primary CTA — open /claim in new tab */}
+            <button
+              onClick={openClaimPage}
+              className="reads-btn-primary w-full flex items-center justify-center gap-2 py-4 text-base"
+            >
+              <ExternalLink size={18} />
+              Open Claim Page
+            </button>
 
-            {/* Main CTA */}
-            {claimStep !== 'no_wallet' && (
-              <>
-                <button
-                  onClick={handleDAppClaim}
-                  disabled={submitting || claimStep === 'confirmed'}
-                  className="reads-btn-primary w-full flex items-center justify-center gap-2 py-4 text-base"
-                >
-                  {submitting
-                    ? <Loader2 size={18} className="animate-spin" />
-                    : <span>₳</span>}
-                  {submitting ? stepLabel[claimStep] : 'Sign & Claim with Eternl'}
-                </button>
-                <p className="text-reads-muted text-[10px] text-center">
-                  Your Cardano wallet will open to sign. No seed phrase needed.
-                </p>
-              </>
-            )}
+            {/* Secondary — copy URL for Eternl mobile DApp browser */}
+            <button
+              onClick={copyClaimUrl}
+              className="w-full flex items-center justify-center gap-2 border border-reads-navy/20 text-reads-navy font-bold text-sm py-3 rounded-2xl active:scale-95 transition-transform"
+            >
+              {copied
+                ? <><CheckCircle size={16} className="text-reads-green" /> URL Copied!</>
+                : <><Copy size={16} /> Copy URL (for Eternl mobile)</>}
+            </button>
+
+            {/* Refresh after claim */}
+            <button
+              onClick={() => { refreshRewards(); setVoucher(null); }}
+              className="w-full text-reads-muted text-xs text-center underline"
+            >
+              I already claimed — refresh my rewards
+            </button>
           </div>
         </div>
       )}
 
+      {/* ── Reward cards ──────────────────────────────────────────── */}
       <div className="space-y-2">
-        {/* Unclaimed rewards */}
+
+        {/* Unclaimed */}
         {unclaimed.map(r => (
           <div key={r.id} className="reads-card px-4 py-3 flex items-center gap-3">
             <div className="w-10 h-10 rounded-2xl bg-reads-green-bg flex items-center justify-center flex-shrink-0">
@@ -564,14 +510,15 @@ const ClaimSection = ({ linkedAddress, showToast }) => {
             <button
               onClick={() => handleIssueVoucher(r.id)}
               disabled={claiming === r.id}
-              className="reads-btn-primary px-3 py-2 text-xs flex items-center gap-1 flex-shrink-0">
+              className="reads-btn-primary px-3 py-2 text-xs flex items-center gap-1 flex-shrink-0"
+            >
               {claiming === r.id ? <Loader2 size={12} className="animate-spin" /> : '₳'}
               Claim
             </button>
           </div>
         ))}
 
-        {/* Voucher issued */}
+        {/* Voucher issued — can re-open claim page */}
         {issued.map(r => (
           <div key={r.id} className="reads-card px-4 py-3 flex items-center gap-3">
             <div className="w-10 h-10 rounded-2xl bg-amber-50 flex items-center justify-center flex-shrink-0">
@@ -579,18 +526,19 @@ const ClaimSection = ({ linkedAddress, showToast }) => {
             </div>
             <div className="flex-1 min-w-0">
               <p className="font-bold text-reads-navy text-sm truncate">{r.description}</p>
-              <p className="text-reads-muted text-xs">Voucher issued — tap to resubmit</p>
+              <p className="text-reads-muted text-xs">Voucher issued — tap to retry</p>
             </div>
             <button
               onClick={() => handleIssueVoucher(r.id)}
               disabled={claiming === r.id}
-              className="px-3 py-2 text-xs font-bold text-amber-600 bg-amber-50 rounded-2xl flex-shrink-0">
-              Retry
+              className="px-3 py-2 text-xs font-bold text-amber-600 bg-amber-50 rounded-2xl flex-shrink-0"
+            >
+              {claiming === r.id ? <Loader2 size={12} className="animate-spin" /> : 'Retry'}
             </button>
           </div>
         ))}
 
-        {/* Claimed */}
+        {/* Claimed — last 3 */}
         {claimed.slice(0, 3).map(r => (
           <div key={r.id} className="reads-card px-4 py-3 flex items-center gap-3 opacity-50">
             <div className="w-10 h-10 rounded-2xl bg-gray-100 flex items-center justify-center flex-shrink-0">
@@ -600,7 +548,9 @@ const ClaimSection = ({ linkedAddress, showToast }) => {
               <p className="font-bold text-reads-navy text-sm truncate">{r.description}</p>
               <p className="text-reads-muted text-xs font-mono truncate">{r.claim_tx_hash?.slice(0, 16)}…</p>
             </div>
-            <span className="text-reads-green text-[10px] font-black px-2 py-1 bg-green-50 rounded-full flex-shrink-0">CLAIMED</span>
+            <span className="text-reads-green text-[10px] font-black px-2 py-1 bg-green-50 rounded-full flex-shrink-0">
+              CLAIMED
+            </span>
           </div>
         ))}
       </div>
@@ -609,6 +559,7 @@ const ClaimSection = ({ linkedAddress, showToast }) => {
 };
 
 
+// ── Main Wallet Module ────────────────────────────────────────────────────────
 export default function WalletModule({ balance: initialBalance, onUpdateBalance }) {
   const [balance, setBalance]           = useState(initialBalance ?? 0);
   const [transactions, setTransactions] = useState([]);

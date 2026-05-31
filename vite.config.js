@@ -14,18 +14,12 @@ export default defineConfig({
       includeAssets: ['favicon.ico', 'apple-touch-icon.png', 'pwa-192x192.png', 'pwa-512x512.png'],
       workbox: {
         globPatterns: ['**/*.{js,css,html,ico,png,svg,woff2}'],
-        // Exclude Mesh WASM binary from precache (too large, loaded on demand)
-        globIgnores: ['**/*.wasm'],
+        globIgnores: ['**/*.wasm', 'sw.js', 'workbox-*.js'],
         runtimeCaching: [
           {
             urlPattern: ({ url }) => url.pathname.startsWith('/api/'),
             handler: 'NetworkFirst',
             options: { cacheName: 'api-cache', networkTimeoutSeconds: 10 },
-          },
-          {
-            urlPattern: ({ request }) => request.destination === 'wasm',
-            handler: 'CacheFirst',
-            options: { cacheName: 'wasm-cache', expiration: { maxEntries: 5 } },
           },
         ],
       },
@@ -41,46 +35,59 @@ export default defineConfig({
         scope: '/',
         categories: ['education', 'finance'],
         icons: [
-          {
-            src: '/pwa-192x192.png',
-            sizes: '192x192',
-            type: 'image/png',
-            purpose: 'any',
-          },
-          {
-            src: '/pwa-512x512.png',
-            sizes: '512x512',
-            type: 'image/png',
-            purpose: 'any',
-          },
-          {
-            src: '/pwa-512x512.png',
-            sizes: '512x512',
-            type: 'image/png',
-            purpose: 'maskable',
-          },
+          { src: '/pwa-192x192.png', sizes: '192x192', type: 'image/png', purpose: 'any' },
+          { src: '/pwa-512x512.png', sizes: '512x512', type: 'image/png', purpose: 'any' },
+          { src: '/pwa-512x512.png', sizes: '512x512', type: 'image/png', purpose: 'maskable' },
         ],
       },
     }),
   ],
-  // Required for Mesh WASM — allow cross-origin isolation headers in dev
+
   server: {
     proxy: {
-      '/api': {
-        target: 'http://localhost:8000',
-        changeOrigin: true,
-      },
+      '/api': { target: 'http://localhost:8000', changeOrigin: true },
     },
     headers: {
       'Cross-Origin-Opener-Policy': 'same-origin',
       'Cross-Origin-Embedder-Policy': 'require-corp',
     },
   },
-  // Ensure WASM files are handled correctly in build
-  optimizeDeps: {
-    exclude: ['@meshsdk/core', '@meshsdk/react'],
-  },
+
+  // Tell Vite/Rollup not to bundle these Node/native modules that
+  // Mesh depends on but the browser doesn't need (or can't use).
+  // libsodium-wrappers-sumo ships its WASM binary as a side-loaded
+  // file — Rollup cannot resolve it; exclude the whole package and
+  // let Mesh load it dynamically at runtime via its own lazy import.
   build: {
     target: 'esnext',
+    rollupOptions: {
+      external: [
+        // libsodium WASM — Mesh loads this lazily; Rollup must not bundle it
+        'libsodium-wrappers-sumo',
+        // Node built-ins that leak through some Mesh transitive deps
+        'crypto',
+        'stream',
+        'events',
+        'buffer',
+        'path',
+        'fs',
+        'os',
+      ],
+    },
+  },
+
+  optimizeDeps: {
+    exclude: ['@meshsdk/core', '@meshsdk/react', 'libsodium-wrappers-sumo'],
+  },
+
+  // Stub Node built-ins for browser — prevents "Module externalized" warnings
+  // from becoming hard errors in some Vite versions
+  resolve: {
+    alias: {
+      // empty shims so imports don't crash at parse time
+      stream: 'stream-browserify',
+      events: 'events',
+      buffer: 'buffer',
+    },
   },
 });
