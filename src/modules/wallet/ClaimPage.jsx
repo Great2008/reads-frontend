@@ -100,7 +100,7 @@ export default function ClaimPage() {
       }
 
       // Load Mesh only now — keeps the page lightweight on mobile
-      const { BrowserWallet, Transaction, resolvePaymentKeyHash } = await loadMesh();
+      const { BrowserWallet, Transaction } = await loadMesh();
 
       const wallet = await BrowserWallet.enable(walletName);
       if (!wallet) throw new Error('Failed to connect to wallet. Please unlock it and try again.');
@@ -121,8 +121,9 @@ export default function ClaimPage() {
       });
       if (!cd || !cd.utxo_tx_hash) throw new Error('Invalid claim data from server. Please try again.');
 
-      // 4. Resolve student PKH from address
-      const studentPkh = resolvePaymentKeyHash(studentAddress);
+      // 4. Student PKH derived server-side — no Mesh resolvePaymentKeyHash needed
+      const studentPkh = cd.student_pkh;
+      if (!studentPkh) throw new Error('Server could not derive payment key hash from address');
 
       // 5. Describe the script UTxO Mesh will spend
       const scriptUtxo = {
