@@ -1,4 +1,4 @@
-import { useState, useEffect, lazy, Suspense } from 'react';
+import { useState, useEffect, lazy, Suspense, Component } from 'react';
 import {
   Award, LayoutDashboard, BookOpen, Wallet, User, Grid,
   Bell, Shield, School, SettingsIcon,
@@ -23,6 +23,46 @@ import NotificationInbox    from './modules/notifications/NotificationInbox.jsx'
 import SchoolModule         from './modules/school/SchoolModule.jsx';
 import AdminModule          from './modules/admin/AdminModule.jsx';
 import PartnerModule        from './modules/partner/PartnerModule.jsx';
+
+// ─────────────────────────────────────────────
+// Claim page error boundary + loading fallback
+// ─────────────────────────────────────────────
+class ClaimErrorBoundary extends Component {
+  constructor(props) { super(props); this.state = { error: null }; }
+  static getDerivedStateFromError(e) { return { error: e }; }
+  render() {
+    if (this.state.error) return (
+      <div className="min-h-screen bg-reads-cream flex flex-col items-center justify-center p-6 gap-4 text-center">
+        <div className="w-16 h-16 bg-reads-navy rounded-3xl flex items-center justify-center shadow-lg">
+          <span className="text-reads-gold font-black text-2xl">₳</span>
+        </div>
+        <p className="font-black text-reads-navy text-lg">Failed to load claim page</p>
+        <p className="text-reads-muted text-sm">Check your connection and try again.</p>
+        <button onClick={() => window.location.reload()}
+          className="bg-reads-navy text-white font-bold px-6 py-3 rounded-2xl text-sm mt-2">
+          Retry
+        </button>
+      </div>
+    );
+    return this.props.children;
+  }
+}
+
+const ClaimFallback = () => (
+  <div className="min-h-screen bg-reads-cream flex flex-col items-center justify-center gap-4">
+    <div className="w-16 h-16 bg-reads-navy rounded-3xl flex items-center justify-center shadow-lg">
+      <span className="text-reads-gold font-black text-2xl">₳</span>
+    </div>
+    <p className="font-black text-reads-navy text-xl">$READS Claim</p>
+    <div className="flex gap-1.5 mt-1">
+      {[0, 1, 2].map(i => (
+        <div key={i} className="w-2 h-2 rounded-full bg-reads-green animate-bounce"
+          style={{ animationDelay: `${i * 0.15}s` }} />
+      ))}
+    </div>
+    <p className="text-reads-muted text-sm">Loading wallet module…</p>
+  </div>
+);
 
 // ─────────────────────────────────────────────
 // Coming Soon overlay for locked Phase 2+ features
@@ -308,7 +348,7 @@ export default function App() {
   // ── Special routes ──────────────────────────────────────────────────────────
   if (isStaffInvite)   return <AcceptInvitePage />;
   if (isPasswordReset) return <ResetPasswordPage />;
-  if (isClaimPage)     return <Suspense fallback={<div className="min-h-screen bg-reads-cream" />}><ClaimPage /></Suspense>;
+  if (isClaimPage)     return <ClaimErrorBoundary><Suspense fallback={<ClaimFallback />}><ClaimPage /></Suspense></ClaimErrorBoundary>;
   if (isLoading)       return <LoadingScreen />;
 
   // ── Unauthenticated ─────────────────────────────────────────────────────────
