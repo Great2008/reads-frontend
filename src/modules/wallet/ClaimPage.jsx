@@ -5,8 +5,12 @@
 
 import { useState, useEffect } from 'react';
 import { Loader2, CheckCircle, XCircle, ExternalLink, Copy } from 'lucide-react';
-import { BrowserWallet, Transaction, resolvePaymentKeyHash } from '@meshsdk/core';
 import { api } from '../../services/api.js';
+
+// Mesh is NOT imported at the top level — it bundles ~4 MB of WASM which
+// crashes on mobile browsers. We dynamic-import it only when the user
+// clicks "Sign & Claim" (desktop wallet flow only).
+const loadMesh = () => import('@meshsdk/core');
 
 const API_URL = (import.meta.env.VITE_API_URL || '') + '/api';
 const WALLETS  = ['eternl', 'nami', 'typhon', 'vespr', 'flint'];
@@ -74,6 +78,10 @@ export default function ClaimPage() {
           'Open this page inside Eternl → DApp Browser tab, or use desktop Eternl/Nami.'
         );
       }
+
+      // Load Mesh only now — keeps the page lightweight on mobile
+      const { BrowserWallet, Transaction, resolvePaymentKeyHash } = await loadMesh();
+
       const wallet = await BrowserWallet.enable(walletName);
 
       // 2. Get student address (bech32 from Mesh — always valid format)
