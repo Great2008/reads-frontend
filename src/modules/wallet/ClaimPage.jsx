@@ -7,10 +7,30 @@ import { useState, useEffect } from 'react';
 import { Loader2, CheckCircle, XCircle, ExternalLink, Copy } from 'lucide-react';
 import { api } from '../../services/api.js';
 
-// Mesh is NOT imported at the top level — it bundles ~4 MB of WASM which
-// crashes on mobile browsers. We dynamic-import it only when the user
-// clicks "Sign & Claim" (desktop wallet flow only).
-const loadMesh = () => import('@meshsdk/core');
+// Mesh + libsodium are NOT imported at the top level — the ~4 MB bundle
+// crashes on plain mobile browsers. On desktop (Eternl DApp browser) we:
+//   1. Load libsodium-wrappers-sumo from CDN (it works fine as a script tag)
+//   2. Wait for sodium.ready
+//   3. Inject it as globalThis.libsodium so @meshsdk/core can find it
+//   4. Then dynamically import @meshsdk/core
+const loadMesh = async () => {
+  // Inject libsodium from CDN if not already present
+  if (!globalThis._sodiumLoaded) {
+    await new Promise((resolve, reject) => {
+      if (document.querySelector('#libsodium-script')) { resolve(); return; }
+      const s = document.createElement('script');
+      s.id  = 'libsodium-script';
+      s.src = 'https://cdnjs.cloudflare.com/ajax/libs/libsodium-wrappers-sumo/0.7.15/libsodium-wrappers-sumo.min.js';
+      s.onload  = resolve;
+      s.onerror = () => reject(new Error('Failed to load libsodium from CDN'));
+      document.head.appendChild(s);
+    });
+    if (window.sodium?.ready) await window.sodium.ready;
+    globalThis.libsodium = window.sodium;
+    globalThis._sodiumLoaded = true;
+  }
+  return import('@meshsdk/core');
+};
 
 const API_URL = (import.meta.env.VITE_API_URL || '') + '/api';
 const WALLETS  = ['eternl', 'nami', 'typhon', 'vespr', 'flint'];
@@ -83,9 +103,11 @@ export default function ClaimPage() {
       const { BrowserWallet, Transaction, resolvePaymentKeyHash } = await loadMesh();
 
       const wallet = await BrowserWallet.enable(walletName);
+      if (!wallet) throw new Error('Failed to connect to wallet. Please unlock it and try again.');
 
       // 2. Get student address (bech32 from Mesh — always valid format)
       const studentAddress = await wallet.getChangeAddress();
+      if (!studentAddress) throw new Error('Could not read address from wallet. Please try again.');
 
       // 3. Fetch claim data from backend (UTxO, script, datum — no tx building)
       setStep('building');
@@ -97,6 +119,7 @@ export default function ClaimPage() {
         platform_signature: voucher.platform_signature,
         platform_vkey:      voucher.platform_vkey,
       });
+      if (!cd || !cd.utxo_tx_hash) throw new Error('Invalid claim data from server. Please try again.');
 
       // 4. Resolve student PKH from address
       const studentPkh = resolvePaymentKeyHash(studentAddress);
