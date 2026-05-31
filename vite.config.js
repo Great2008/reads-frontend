@@ -3,26 +3,13 @@ import react from '@vitejs/plugin-react';
 import wasm from 'vite-plugin-wasm';
 import topLevelAwait from 'vite-plugin-top-level-await';
 import { VitePWA } from 'vite-plugin-pwa';
+import path from 'path';
+import { fileURLToPath } from 'url';
 
-// libsodium-wrappers-sumo ships an ESM build that uses a relative dynamic
-// import for its WASM file ("./libsodium-sumo.mjs") which Rollup cannot
-// resolve at build time. This plugin rewrites any import of the ESM entry
-// to the CJS build, which Vite wraps correctly without the broken relative ref.
-function libsodiumCjsPlugin() {
-  return {
-    name: 'libsodium-cjs-redirect',
-    enforce: 'pre',
-    resolveId(id) {
-      if (id === 'libsodium-wrappers-sumo') {
-        return { id: 'libsodium-wrappers-sumo/dist/modules-sumo/libsodium-wrappers-sumo.js', external: false };
-      }
-    },
-  };
-}
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
 export default defineConfig({
   plugins: [
-    libsodiumCjsPlugin(),
     react(),
     wasm(),
     topLevelAwait(),
@@ -76,15 +63,7 @@ export default defineConfig({
     chunkSizeWarningLimit: 6000,
     rollupOptions: {
       external: [
-        // Node built-ins only — npm packages must NOT be here or the
-        // browser receives unresolvable bare specifiers at runtime.
-        'crypto',
-        'stream',
-        'events',
-        'buffer',
-        'path',
-        'fs',
-        'os',
+        'crypto', 'stream', 'events', 'buffer', 'path', 'fs', 'os',
       ],
     },
   },
@@ -95,6 +74,12 @@ export default defineConfig({
 
   resolve: {
     alias: {
+      // libsodium-wrappers-sumo ships a broken ESM build that references
+      // a WASM file via relative import — Rollup cannot resolve it at
+      // build time. We alias it to a local stub for the build; at runtime
+      // on desktop the dynamic import() in ClaimPage loads @meshsdk/core
+      // which will use its own bundled copy.
+      'libsodium-wrappers-sumo': path.resolve(__dirname, 'src/libsodium-stub.js'),
       stream: 'stream-browserify',
       events: 'events',
       buffer: 'buffer',
