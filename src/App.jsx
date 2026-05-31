@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, lazy, Suspense } from 'react';
 import {
   Award, LayoutDashboard, BookOpen, Wallet, User, Grid,
   Bell, Shield, School, SettingsIcon,
@@ -12,7 +12,7 @@ import WelcomePage          from './modules/welcome/WelcomePage.jsx';
 import AuthModule           from './modules/auth/AuthModule.jsx';
 import ResetPasswordPage    from './modules/auth/ResetPasswordPage.jsx';
 import AcceptInvitePage     from './modules/auth/AcceptInvitePage.jsx';
-import ClaimPage           from './modules/wallet/ClaimPage.jsx';
+const ClaimPage = lazy(() => import('./modules/wallet/ClaimPage.jsx'));
 import LoadingScreen        from './components/LoadingScreen.jsx';
 import Dashboard            from './modules/dashboard/Dashboard.jsx';
 import LearnModule          from './modules/learn/LearnModule.jsx';
@@ -308,7 +308,7 @@ export default function App() {
   // ── Special routes ──────────────────────────────────────────────────────────
   if (isStaffInvite)   return <AcceptInvitePage />;
   if (isPasswordReset) return <ResetPasswordPage />;
-  if (isClaimPage)     return <ClaimPage />;
+  if (isClaimPage)     return <Suspense fallback={<div className="min-h-screen bg-reads-cream" />}><ClaimPage /></Suspense>;
   if (isLoading)       return <LoadingScreen />;
 
   // ── Unauthenticated ─────────────────────────────────────────────────────────
