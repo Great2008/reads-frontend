@@ -52,6 +52,15 @@ export default function ClaimPage() {
   const [error, setError]       = useState('');
   const [txHash, setTxHash]     = useState('');
   const [needsLogin, setNeedsLogin] = useState(false);
+  const [debugLog, setDebugLog] = useState([]);
+  const [showDebug, setShowDebug] = useState(false);
+
+  const dbg = (label, data) => {
+    const entry = `[${new Date().toISOString().slice(11,23)}] ${label}`
+      + (data !== undefined ? ': ' + JSON.stringify(data, null, 2) : '');
+    console.log(entry);
+    setDebugLog(prev => [...prev, entry]);
+  };
 
   // ── Parse voucher from URL ──────────────────────────────────────────────────
   useEffect(() => {
@@ -89,9 +98,11 @@ export default function ClaimPage() {
   // ── Main claim handler ──────────────────────────────────────────────────────
   const handleClaim = async () => {
     try {
+      dbg('handleClaim started', { wallets: Object.keys(window.cardano || {}), voucherAmount: voucher?.amount });
       // 1. Detect & connect wallet
       setStep('connecting');
       const walletName = WALLETS.find(w => window.cardano?.[w]);
+      dbg('walletName detected', walletName);
       if (!walletName) {
         throw new Error(
           'No Cardano wallet detected.\n' +
@@ -100,13 +111,18 @@ export default function ClaimPage() {
       }
 
       // Load Mesh only now — keeps the page lightweight on mobile
+      dbg('loading Mesh + libsodium...');
       const { BrowserWallet, Transaction } = await loadMesh();
+      dbg('Mesh loaded', { BrowserWallet: typeof BrowserWallet, Transaction: typeof Transaction });
 
+      dbg('enabling BrowserWallet', walletName);
       const wallet = await BrowserWallet.enable(walletName);
+      dbg('wallet result', { type: typeof wallet, isNull: wallet == null });
       if (!wallet) throw new Error('Failed to connect to wallet. Please unlock it and try again.');
 
       // 2. Get student address (bech32 from Mesh — always valid format)
       const studentAddress = await wallet.getChangeAddress();
+      dbg('studentAddress', studentAddress);
       if (!studentAddress) throw new Error('Could not read address from wallet. Please try again.');
 
       // 3. Fetch claim data from backend (UTxO, script, datum — no tx building)
@@ -119,10 +135,12 @@ export default function ClaimPage() {
         platform_signature: voucher.platform_signature,
         platform_vkey:      voucher.platform_vkey,
       });
+      dbg('cd response', { keys: cd ? Object.keys(cd) : null, amount: cd?.amount, student_pkh: cd?.student_pkh, utxo: cd?.utxo_tx_hash });
       if (!cd || !cd.utxo_tx_hash) throw new Error('Invalid claim data from server. Please try again.');
 
       // 4. Student PKH derived server-side — no Mesh resolvePaymentKeyHash needed
       const studentPkh = cd.student_pkh;
+      dbg('studentPkh', studentPkh);
       if (!studentPkh) throw new Error('Server could not derive payment key hash from address');
 
       // 5. Describe the script UTxO Mesh will spend
@@ -181,7 +199,9 @@ export default function ClaimPage() {
         .setTimeToExpire(String(cd.expires_slot))
         .setRequiredSigners([studentAddress]);
 
+      dbg('building tx...');
       const unsignedTx = await tx.build();
+      dbg('tx built OK', unsignedTx ? String(unsignedTx).slice(0,60) : null);
 
       // 10. Ask wallet to sign (partialSign=true — Mesh already added the script witness)
       setStep('signing');
@@ -215,6 +235,7 @@ export default function ClaimPage() {
       setStep('confirmed');
 
     } catch (err) {
+      dbg('CAUGHT ERROR', { msg: err?.message, stack: err?.stack ? err.stack.slice(0,800) : null });
       const msg = err?.message || 'Unknown error';
       if (msg === 'SESSION_EXPIRED' || msg.includes('SESSION_EXPIRED')) {
         localStorage.removeItem('access_token');
@@ -394,6 +415,24 @@ export default function ClaimPage() {
               </button>
             )}
           </>
+
+        {/* ── Debug Panel ─────────────────────────────── */}
+        <div className="mt-3">
+          <button
+            onClick={() => setShowDebug(v => !v)}
+            className="w-full text-xs text-reads-muted font-mono py-1.5 border border-dashed border-gray-300 rounded-xl"
+          >
+            {showDebug ? '▲ Hide Debug Log' : '▼ Show Debug Log'} ({debugLog.length})
+          </button>
+          {showDebug && (
+            <div className="mt-2 bg-gray-950 text-green-400 font-mono text-xs rounded-xl p-3 max-h-64 overflow-y-auto space-y-1 text-left">
+              {debugLog.length === 0
+                ? <p className="text-gray-500">No entries yet — press Sign &amp; Claim to start.</p>
+                : debugLog.map((e, i) => <pre key={i} className="whitespace-pre-wrap break-all">{e}</pre>)
+              }
+            </div>
+          )}
+        </div>
         )}
 
         {/* Processing */}
