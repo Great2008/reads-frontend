@@ -48,6 +48,19 @@ export default defineConfig({
     }),
   ],
 
+  // Inject all Node globals that Cardano/Mesh deps reference at runtime.
+  // Buffer and process are the most common; the rest cover edge cases in
+  // @cardano-sdk/*, @harmoniclabs/*, and csl/cborjs transitive deps.
+  define: {
+    global: 'globalThis',
+    'process.env': '{}',
+    'process.env.NODE_ENV': JSON.stringify('production'),
+    'process.version': '"v18.0.0"',
+    'process.browser': 'true',
+    'process.platform': '"browser"',
+    'process.nextTick': 'globalThis.queueMicrotask',
+  },
+
   server: {
     proxy: {
       '/api': { target: 'http://localhost:8000', changeOrigin: true },
@@ -58,21 +71,9 @@ export default defineConfig({
     },
   },
 
-  define: {
-    // Some Cardano/Mesh deps reference Node globals — polyfill them for browser
-    global: 'globalThis',
-    'process.env': '{}',
-    'process.version': '"v18.0.0"',
-    'process.browser': 'true',
-  },
-
   build: {
     target: 'esnext',
     chunkSizeWarningLimit: 6000,
-    // No externals — all npm packages must be bundled.
-    // Only true Node built-ins (never present in the browser) should be
-    // external, but Vite already handles those via its own Node polyfill
-    // logic, so we don't need to list them here.
     rollupOptions: {},
   },
 
@@ -82,12 +83,10 @@ export default defineConfig({
 
   resolve: {
     alias: {
-      // libsodium-wrappers-sumo ships a broken ESM build that references
-      // a WASM file via relative import Rollup cannot resolve at build time.
-      // Stub it out — the real crypto runs inside @meshsdk/core at runtime
-      // on desktop only (ClaimPage dynamic-imports Mesh on wallet click).
+      // libsodium-wrappers-sumo ESM build has a broken relative WASM import.
+      // Stub it for the build; Mesh uses it only on desktop wallet sign flow.
       'libsodium-wrappers-sumo': path.resolve(__dirname, 'src/libsodium-stub.js'),
-      // Node polyfills for packages that reference them
+      // Node polyfills
       stream: 'stream-browserify',
       events: 'events',
       buffer: 'buffer',
