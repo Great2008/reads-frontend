@@ -62,11 +62,11 @@ const req = async (method, path, body = null, auth = true) => {
   return res.json();
 };
 
-const get  = (path, auth = true)        => req('GET',    path, null, auth);
-const post = (path, body, auth = true)  => req('POST',   path, body, auth);
-const put  = (path, body, auth = true)  => req('PUT',    path, body, auth);
+const get   = (path, auth = true)       => req('GET',    path, null, auth);
+const post  = (path, body, auth = true) => req('POST',   path, body, auth);
+const put   = (path, body, auth = true) => req('PUT',    path, body, auth);
 const patch = (path, body, auth = true) => req('PATCH',  path, body, auth);
-const del  = (path, auth = true)        => req('DELETE', path, null, auth);
+const del   = (path, auth = true)       => req('DELETE', path, null, auth);
 
 // ── Auth ──────────────────────────────────────────────────────────────────────
 export const auth = {
@@ -249,7 +249,6 @@ export const school = {
   createFee: (data) => post('/school/fees', data),
   getFeePayments: (fee_id) => get(`/school/fees/${fee_id}/payments`),
   recordPayment: (fee_id, data) => post(`/school/fees/${fee_id}/payments`, data),
-  // FIXED: was POST /school/fees/{fee_id}/acknowledge — backend is PATCH /school/fees/payments/{payment_id}/acknowledge
   acknowledgeFee: (payment_id) => patch(`/school/fees/payments/${payment_id}/acknowledge`, {}),
 };
 
@@ -295,9 +294,12 @@ export const tutors = {
   confirmSession: (session_id) => post(`/tutors/sessions/${session_id}/confirm`, {}),
   disputeSession: (session_id, reason) => post(`/tutors/sessions/${session_id}/dispute`, { reason }),
   cancelSession: (session_id, reason) => post(`/tutors/sessions/${session_id}/cancel`, { reason }),
-  getMessages: (session_id, since = null) => get(`/tutors/sessions/${session_id}/messages${since ? `?since=${encodeURIComponent(since)}` : ''}`),
-  sendMessage: (session_id, content) => post(`/tutors/sessions/${session_id}/messages`, { reason: content }),
-  rateSession: (session_id, stars, comment) => post(`/tutors/sessions/${session_id}/rate`, { stars, comment }),
+  getMessages: (session_id, since = null) =>
+    get(`/tutors/sessions/${session_id}/messages${since ? `?since=${encodeURIComponent(since)}` : ''}`),
+  sendMessage: (session_id, content) =>
+    post(`/tutors/sessions/${session_id}/messages`, { reason: content }),
+  rateSession: (session_id, stars, comment) =>
+    post(`/tutors/sessions/${session_id}/rate`, { stars, comment }),
 };
 
 // ── Wallet ────────────────────────────────────────────────────────────────────
@@ -330,7 +332,12 @@ export const wallet = {
   verifyPayment: (data) => post('/wallet/verify-payment', data),
   txConfirmations: (txHash) => get(`/wallet/tx-confirmations/${txHash}`),
   tokenInfo: () => get('/wallet/token-info'),
-  buildClaimTx: (data) => post('/wallet/rewards/build-claim-tx', data),
+
+  // Mesh-based claim flow — replaces buildClaimTx
+  // Returns UTxO data, script, datum so Mesh can build the tx on the frontend
+  getClaimData: (data) => post('/wallet/rewards/claim-data', data),
+
+  // Submit the fully-signed tx CBOR built by Mesh
   submitClaimTx: (data) => post('/wallet/rewards/submit-claim-tx', data),
 };
 
@@ -343,7 +350,6 @@ export const marketplace = {
   get: (item_id) => get(`/marketplace/item/${item_id}`),
   buy: (item_id) => post(`/marketplace/${item_id}/buy`, {}),
 
-  // Multipart form — supports optional file attachment
   list_item: async (data, file = null) => {
     const token = localStorage.getItem('access_token');
     const form = new FormData();
@@ -351,8 +357,8 @@ export const marketplace = {
     form.append('category', data.category);
     form.append('price_tokens', String(data.price_tokens));
     if (data.description) form.append('description', data.description);
-    if (data.exam_type) form.append('exam_type', data.exam_type);
-    if (file) form.append('file', file);
+    if (data.exam_type)   form.append('exam_type', data.exam_type);
+    if (file)             form.append('file', file);
     const res = await fetch(`${API_URL}/marketplace`, {
       method: 'POST',
       headers: token ? { 'Authorization': `Bearer ${token}` } : {},
@@ -456,6 +462,8 @@ export const admin = {
     post(`/admin/exams/registrations/${registration_id}/verify`, data),
   releaseEscrow: (registration_id) =>
     post(`/admin/exams/registrations/${registration_id}/release-escrow`, {}),
+  releaseExamEscrow: (id) =>
+    post(`/admin/exams/registrations/${id}/release-escrow`, {}),
 
   // Tutors
   getTutorApplications: () => get('/admin/tutors/applications'),
@@ -483,18 +491,16 @@ export const admin = {
   // School Curriculum (admin view)
   getSchoolCurriculum: (school_id) => get(`/admin/schools/${school_id}/curriculum`),
 
-  // Exam escrow (additional action not covered above)
-  releaseExamEscrow: (id) => post(`/admin/exams/registrations/${id}/release-escrow`, {}),
-
   // Tournament
   listTournaments: () => get('/tournaments/admin/list'),
   createTournament: (data) => post('/tournaments/admin/create', data),
-  setTournamentStatus: (id, status) => patch(`/tournaments/admin/${id}/status?status=${status}`, {}),
+  setTournamentStatus: (id, status) =>
+    patch(`/tournaments/admin/${id}/status?status=${status}`, {}),
   getTournamentStandingsAdmin: (id) => get(`/tournaments/admin/${id}/standings`),
   advanceTop3: (id) => post(`/tournaments/admin/${id}/advance-top3`, {}),
   getCheatFlags: () => get('/tournaments/admin/flags'),
-  reviewFlag: (id, decision) => patch(`/tournaments/admin/flags/${id}/review`, { decision }),
-  // (old stale endpoints removed — use api.tournament or api.admin.listTournaments etc.)
+  reviewFlag: (id, decision) =>
+    patch(`/tournaments/admin/flags/${id}/review`, { decision }),
 
   // Schools
   getSchools: () => get('/admin/schools'),
@@ -529,7 +535,8 @@ export const partner = {
   getFees: () => get('/partner/school/fees'),
   getSessions: () => get('/partner/school/sessions'),
   getLessons: () => get('/partner/lessons'),
-  submitEditRequest: (lesson_id, data) => post(`/partner/lessons/${lesson_id}/edit-request`, data),
+  submitEditRequest: (lesson_id, data) =>
+    post(`/partner/lessons/${lesson_id}/edit-request`, data),
   getEditRequests: () => get('/partner/lessons/edit-requests'),
 
   // Classes
@@ -558,24 +565,14 @@ export const tutorPortal = {
   confirmSession: (session_id) => post(`/tutor/sessions/${session_id}/confirm`, {}),
   cancelSession: (session_id, reason) =>
     post(`/tutor/sessions/${session_id}/cancel`, { reason }),
-  completeSession: (session_id) =>
-    post(`/tutor/sessions/${session_id}/complete`, {}),
-  confirmSession: (session_id) =>
-    post(`/tutor/sessions/${session_id}/confirm`, {}),
+  completeSession: (session_id) => post(`/tutor/sessions/${session_id}/complete`, {}),
   setAvailability: (data) => post('/tutor/availability', data),
   getEarnings: () => get('/tutor/earnings'),
-  getMessages: (session_id, since = null) => get(`/tutor/sessions/${session_id}/messages${since ? `?since=${since}` : ''}`),
-  sendMessage: (session_id, content) => post(`/tutor/sessions/${session_id}/messages`, { content }),
+  getMessages: (session_id, since = null) =>
+    get(`/tutor/sessions/${session_id}/messages${since ? `?since=${since}` : ''}`),
+  sendMessage: (session_id, content) =>
+    post(`/tutor/sessions/${session_id}/messages`, { content }),
 };
-const upload = async (path, formData) => {
-  const token = localStorage.getItem('access_token');
-  const headers = {};
-  if (token) headers['Authorization'] = `Bearer ${token}`;
-  const res = await fetch(`${API_URL}${path}`, { method: 'POST', headers, body: formData });
-  if (!res.ok) await handleError(res, `UPLOAD ${path}`);
-  return res.json();
-};
-// ── Single export ──────────────────────────────────────────────────────────────
 
 // ── Tournament / Smart Challenge ─────────────────────────────────────────────
 export const tournament = {
@@ -593,13 +590,25 @@ export const tournament = {
   // Admin-facing
   adminList: () => get('/tournaments/admin/list'),
   adminCreate: (data) => post('/tournaments/admin/create', data),
-  adminSetStatus: (id, status) => patch(`/tournaments/admin/${id}/status?status=${status}`, {}),
+  adminSetStatus: (id, status) =>
+    patch(`/tournaments/admin/${id}/status?status=${status}`, {}),
   adminStandings: (id) => get(`/tournaments/admin/${id}/standings`),
   adminAdvanceTop3: (id) => post(`/tournaments/admin/${id}/advance-top3`, {}),
   adminFlags: () => get('/tournaments/admin/flags'),
-  adminReviewFlag: (id, decision) => patch(`/tournaments/admin/flags/${id}/review`, { decision }),
+  adminReviewFlag: (id, decision) =>
+    patch(`/tournaments/admin/flags/${id}/review`, { decision }),
 };
 
+const upload = async (path, formData) => {
+  const token = localStorage.getItem('access_token');
+  const headers = {};
+  if (token) headers['Authorization'] = `Bearer ${token}`;
+  const res = await fetch(`${API_URL}${path}`, { method: 'POST', headers, body: formData });
+  if (!res.ok) await handleError(res, `UPLOAD ${path}`);
+  return res.json();
+};
+
+// ── Single export ─────────────────────────────────────────────────────────────
 export const api = {
   // Base HTTP methods
   get,

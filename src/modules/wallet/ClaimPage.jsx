@@ -1,20 +1,21 @@
 // ClaimPage.jsx
 // Standalone page at /claim?voucher=...
-// Works inside Eternl mobile's DApp browser where window.cardano.eternl IS available
-// Also works in any desktop browser with Eternl/Nami extension
+// Uses Mesh SDK to build + sign + submit the claim tx.
+// Mesh bundles the same CSL as Eternl — no CBOR tag mismatches possible.
 
 import { useState, useEffect } from 'react';
 import { Loader2, CheckCircle, XCircle, ExternalLink, Copy } from 'lucide-react';
+import { BrowserWallet, Transaction, resolvePaymentKeyHash } from '@meshsdk/core';
 import { api } from '../../services/api.js';
 
 const API_URL = (import.meta.env.VITE_API_URL || '') + '/api';
-
-const WALLETS = ['eternl', 'nami', 'typhon', 'vespr', 'flint'];
+const WALLETS  = ['eternl', 'nami', 'typhon', 'vespr', 'flint'];
 
 const STEPS = {
   loading:    'Loading voucher…',
   ready:      'Ready to claim',
   connecting: 'Connecting wallet…',
+  building:   'Building transaction…',
   signing:    'Waiting for signature…',
   submitting: 'Submitting to blockchain…',
   confirmed:  'Tokens claimed!',
@@ -22,17 +23,17 @@ const STEPS = {
 };
 
 export default function ClaimPage() {
-  const [step, setStep]       = useState('loading');
-  const [voucher, setVoucher] = useState(null);
-  const [error, setError]     = useState('');
-  const [txHash, setTxHash]   = useState('');
-  const [wallet, setWallet]   = useState(null);
+  const [step, setStep]         = useState('loading');
+  const [voucher, setVoucher]   = useState(null);
+  const [error, setError]       = useState('');
+  const [txHash, setTxHash]     = useState('');
   const [needsLogin, setNeedsLogin] = useState(false);
 
-  // ── Parse voucher from URL ──────────────────────────────────
+  // ── Parse voucher from URL ──────────────────────────────────────────────────
   useEffect(() => {
-    const params = new URLSearchParams(window.location.search);
-    const raw = params.get('voucher');
+    const params   = new URLSearchParams(window.location.search);
+    const raw      = params.get('voucher');
+    const urlToken = params.get('token');
 
     if (!raw) {
       setError('No voucher found in URL.');
@@ -47,78 +48,121 @@ export default function ClaimPage() {
       }
       setVoucher(v);
 
-      // Extract token from URL if present (passed from main app)
-      const urlToken = params.get('token');
       if (urlToken) {
         localStorage.setItem('access_token', decodeURIComponent(urlToken));
       }
 
-      // Check if logged in
       const token = urlToken || localStorage.getItem('access_token');
-      if (!token) {
-        setNeedsLogin(true);
-        setStep('ready');
-        return;
-      }
+      if (!token) setNeedsLogin(true);
+
       setStep('ready');
-    } catch (e) {
+    } catch {
       setError('Invalid voucher data. Please go back and try again.');
       setStep('error');
     }
   }, []);
 
-  // ── Detect wallet ───────────────────────────────────────────
-  const detectWallet = () => WALLETS.find(w => window.cardano?.[w]);
-
-  // ── Main claim handler ──────────────────────────────────────
+  // ── Main claim handler ──────────────────────────────────────────────────────
   const handleClaim = async () => {
-    const walletName = detectWallet();
-    if (!walletName) {
-      setError(
-        'No Cardano wallet detected. Open this page inside Eternl\'s DApp browser:\n' +
-        'Eternl → DApp Browser tab → paste this URL'
-      );
-      setStep('error');
-      return;
-    }
-
     try {
-      // 1. Connect wallet
+      // 1. Detect & connect wallet
       setStep('connecting');
-      const walletApi = await window.cardano[walletName].enable();
-      setWallet(walletApi);
+      const walletName = WALLETS.find(w => window.cardano?.[w]);
+      if (!walletName) {
+        throw new Error(
+          'No Cardano wallet detected.\n' +
+          'Open this page inside Eternl → DApp Browser tab, or use desktop Eternl/Nami.'
+        );
+      }
+      const wallet = await BrowserWallet.enable(walletName);
 
-      // 2. Get student address from wallet
-      const changeAddrHex = await walletApi.getChangeAddress();
-      const studentAddress = bech32FromHex(changeAddrHex);
+      // 2. Get student address (bech32 from Mesh — always valid format)
+      const studentAddress = await wallet.getChangeAddress();
 
-      // 3. Request tx build from backend
-      setStep('signing');
-      const txData = await api.wallet.buildClaimTx({
-        reward_id: voucher.reward_id,
-        student_address: changeAddrHex || voucher.student_address,  // send raw hex, backend decodes
-        amount: voucher.amount,
-        expires_slot: voucher.expires_slot,
+      // 3. Fetch claim data from backend (UTxO, script, datum — no tx building)
+      setStep('building');
+      const cd = await api.wallet.getClaimData({
+        reward_id:          voucher.reward_id,
+        student_address:    studentAddress,
+        amount:             voucher.amount,
+        expires_slot:       voucher.expires_slot,
         platform_signature: voucher.platform_signature,
-        platform_vkey: voucher.platform_vkey,
+        platform_vkey:      voucher.platform_vkey,
       });
 
-      if (!txData?.tx_cbor) {
-        throw new Error(txData?.detail || 'Failed to build transaction');
-      }
+      // 4. Resolve student PKH from address
+      const studentPkh = resolvePaymentKeyHash(studentAddress);
 
-      // 4. Sign with wallet
-      // partialSign=true because the tx has no vkey witnesses yet (backend builds unsigned).
-      // The wallet (Eternl/CSL) parses the tx_cbor before showing the signing dialog —
-      // any CBOR issue will throw here with a deserialization message.
-      let witnessSet;
+      // 5. Describe the script UTxO Mesh will spend
+      const scriptUtxo = {
+        input: {
+          txHash:      cd.utxo_tx_hash,
+          outputIndex: cd.utxo_tx_index,
+        },
+        output: {
+          address:    cd.contract_address,
+          amount:     cd.utxo_amount,   // [{unit, quantity}, ...]
+          plutusData: cd.datum_cbor,    // raw CBOR hex string
+        },
+      };
+
+      // 6. Describe the PlutusV3 script
+      const script = {
+        code:    cd.script_cbor,
+        version: 'V3',
+      };
+
+      // 7. Build the redeemer — Mesh handles all CBOR encoding internally.
+      //    field order matches Aiken ClaimRedeemer:
+      //    { student_pkh, amount, reward_id, expires_slot, platform_signature }
+      const redeemer = {
+        data: {
+          alternative: 0,
+          fields: [
+            { bytes: studentPkh },
+            { int: cd.amount },
+            { bytes: voucher.reward_id.replace(/-/g, '') },
+            { int: cd.expires_slot },
+            { bytes: voucher.platform_signature },
+          ],
+        },
+        exUnits: {
+          mem:   500_000,
+          steps: 200_000_000,
+        },
+      };
+
+      // 8. Compose the asset id
+      const assetUnit = cd.policy_id + cd.asset_name_hex;
+
+      // 9. Build tx with Mesh — it handles CBOR, witnesses, script data hash
+      const tx = new Transaction({ initiator: wallet })
+        .redeemValue({
+          value:    scriptUtxo,
+          script:   script,
+          redeemer: redeemer,
+        })
+        .sendValue(
+          studentAddress,
+          { lovelace: '2000000', [assetUnit]: String(cd.amount) }
+        )
+        .setTimeToExpire(String(cd.expires_slot))
+        .setRequiredSigners([studentAddress]);
+
+      const unsignedTx = await tx.build();
+
+      // 10. Ask wallet to sign (partialSign=true — Mesh already added the script witness)
+      setStep('signing');
+      let signedTx;
       try {
-        witnessSet = await walletApi.signTx(txData.tx_cbor, true);
+        signedTx = await wallet.signTx(unsignedTx, true);
       } catch (signErr) {
-        // CIP-30 wallets throw either a string, a TxSignError object {code, info},
-        // or a plain Error. Normalise to a readable message.
         const info = signErr?.info || signErr?.message || String(signErr);
-        if (info.toLowerCase().includes('cancel') || info.toLowerCase().includes('declined') || signErr?.code === 2) {
+        if (
+          info.toLowerCase().includes('cancel') ||
+          info.toLowerCase().includes('declined') ||
+          signErr?.code === 2
+        ) {
           setError('Transaction cancelled. You can try again.');
           setStep('ready');
           return;
@@ -126,13 +170,13 @@ export default function ClaimPage() {
         throw new Error(`Wallet signing failed: ${info}`);
       }
 
-      // 5. Submit
+      // 11. Submit via backend → Blockfrost
       setStep('submitting');
       const result = await api.wallet.submitClaimTx({
-        reward_id: voucher.reward_id,
-        tx_cbor: txData.tx_cbor,
-        witness_set: witnessSet,
-        student_address: studentAddress || voucher.student_address,
+        reward_id:       voucher.reward_id,
+        tx_cbor:         signedTx,
+        witness_set:     '',          // not needed — Mesh builds complete tx
+        student_address: studentAddress,
       });
 
       setTxHash(result.tx_hash);
@@ -141,11 +185,13 @@ export default function ClaimPage() {
     } catch (err) {
       const msg = err?.message || 'Unknown error';
       if (msg === 'SESSION_EXPIRED' || msg.includes('SESSION_EXPIRED')) {
-        // Token expired — show embedded login form
         localStorage.removeItem('access_token');
         setNeedsLogin(true);
         setStep('ready');
-      } else if (msg.toLowerCase().includes('cancel') || msg.toLowerCase().includes('declined')) {
+      } else if (
+        msg.toLowerCase().includes('cancel') ||
+        msg.toLowerCase().includes('declined')
+      ) {
         setError('Transaction cancelled. You can try again.');
         setStep('ready');
       } else {
@@ -155,26 +201,17 @@ export default function ClaimPage() {
     }
   };
 
-  // ── Bech32 helper (minimal — just passes through for now) ───
-  const bech32FromHex = (hex) => {
-    // CIP-30 returns hex CBOR address
-    // For now return as-is — backend validates format
-    return hex;
-  };
+  // ── Copy URL helper ─────────────────────────────────────────────────────────
+  const copyUrl = () => navigator.clipboard.writeText(window.location.href);
 
-  // ── Copy URL helper ─────────────────────────────────────────
-  const copyUrl = () => {
-    navigator.clipboard.writeText(window.location.href);
-  };
+  const walletDetected = WALLETS.find(w => window.cardano?.[w]);
+  const isProcessing   = ['connecting', 'building', 'signing', 'submitting'].includes(step);
 
-  const walletDetected = detectWallet();
-  const isProcessing   = ['connecting', 'signing', 'submitting'].includes(step);
-
-  // ── Embedded login state ───────────────────────────────────
-  const [loginEmail, setLoginEmail]       = useState('');
+  // ── Embedded login ──────────────────────────────────────────────────────────
+  const [loginEmail,    setLoginEmail]    = useState('');
   const [loginPassword, setLoginPassword] = useState('');
-  const [loginLoading, setLoginLoading]   = useState(false);
-  const [loginError, setLoginError]       = useState('');
+  const [loginLoading,  setLoginLoading]  = useState(false);
+  const [loginError,    setLoginError]    = useState('');
 
   const handleLogin = async () => {
     if (!loginEmail || !loginPassword) {
@@ -184,10 +221,10 @@ export default function ClaimPage() {
     setLoginLoading(true);
     setLoginError('');
     try {
-      const res = await fetch(`${API_URL}/auth/login`, {
-        method: 'POST',
+      const res  = await fetch(`${API_URL}/auth/login`, {
+        method:  'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email: loginEmail, password: loginPassword }),
+        body:    JSON.stringify({ email: loginEmail, password: loginPassword }),
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.detail || 'Login failed');
@@ -198,15 +235,15 @@ export default function ClaimPage() {
       setLoginPassword('');
       setStep('ready');
     } catch (e) {
-      setLoginError(e.message || 'Login failed');
+      setLoginError(e.message);
     } finally {
       setLoginLoading(false);
     }
   };
 
-  // ── Render ──────────────────────────────────────────────────
+  // ── Render ──────────────────────────────────────────────────────────────────
   return (
-    <div className="min-h-screen bg-gray-50 flex flex-col items-center justify-center px-4 py-10">
+    <div className="min-h-screen bg-reads-cream flex flex-col items-center justify-center p-4">
 
       {/* Logo */}
       <div className="mb-8 text-center">
@@ -217,7 +254,7 @@ export default function ClaimPage() {
         <p className="text-reads-muted text-sm">Cardano Learn-to-Earn</p>
       </div>
 
-      <div className="w-full max-w-sm bg-white rounded-3xl shadow-lg p-6 space-y-5">
+      <div className="w-full max-w-sm bg-white rounded-3xl shadow-reads-card p-6 space-y-5">
 
         {/* Loading */}
         {step === 'loading' && (
@@ -236,10 +273,10 @@ export default function ClaimPage() {
             </div>
 
             {/* Voucher details */}
-            <div className="bg-gray-50 rounded-2xl p-4 space-y-3">
+            <div className="bg-reads-cream rounded-2xl p-4 space-y-3">
               {[
-                ['Amount', `${voucher.amount?.toLocaleString()} $READS`],
-                ['Reward', voucher.description || 'Quiz/Tournament reward'],
+                ['Amount',  `${voucher.amount?.toLocaleString()} $READS`],
+                ['Reward',  voucher.description || 'Quiz/Tournament reward'],
                 ['Expires', `Slot ${voucher.expires_slot?.toLocaleString()}`],
                 ['Network', 'Cardano Preprod'],
               ].map(([label, val]) => (
@@ -275,18 +312,15 @@ export default function ClaimPage() {
                     className="w-full border border-gray-200 rounded-2xl px-4 py-3 text-sm outline-none focus:border-reads-green transition-colors"
                   />
                   {loginError && (
-                    <p className="text-red-500 text-xs px-1">{loginError}</p>
+                    <p className="text-reads-red text-xs px-1">{loginError}</p>
                   )}
                   <button
                     onClick={handleLogin}
                     disabled={loginLoading}
-                    className="w-full bg-reads-navy text-white font-bold text-sm py-3.5 rounded-2xl flex items-center justify-center gap-2 active:scale-95 transition-transform"
+                    className="w-full bg-reads-navy text-white font-bold text-sm py-3.5 rounded-2xl flex items-center justify-center gap-2 active:scale-95 transition-transform disabled:opacity-60"
                   >
                     {loginLoading
-                      ? <svg className="animate-spin w-4 h-4" viewBox="0 0 24 24" fill="none">
-                          <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/>
-                          <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8z"/>
-                        </svg>
+                      ? <Loader2 size={16} className="animate-spin" />
                       : null}
                     {loginLoading ? 'Logging in…' : 'Log In & Continue'}
                   </button>
@@ -299,10 +333,13 @@ export default function ClaimPage() {
               <div className="bg-blue-50 border border-blue-100 rounded-2xl p-3 space-y-2">
                 <p className="text-blue-700 text-xs font-semibold">No wallet detected</p>
                 <p className="text-blue-600 text-xs">
-                  Open this page inside <strong>Eternl mobile</strong> → DApp Browser tab, or use a desktop browser with Eternl/Nami installed.
+                  Open this page inside <strong>Eternl mobile</strong> → DApp Browser tab,
+                  or use a desktop browser with Eternl/Nami installed.
                 </p>
-                <button onClick={copyUrl}
-                  className="flex items-center gap-1.5 text-blue-600 text-xs font-bold">
+                <button
+                  onClick={copyUrl}
+                  className="flex items-center gap-1.5 text-blue-600 text-xs font-bold"
+                >
                   <Copy size={12} /> Copy this page URL
                 </button>
               </div>
@@ -315,12 +352,12 @@ export default function ClaimPage() {
                 disabled={!walletDetected}
                 className={`w-full py-4 rounded-2xl font-black text-sm flex items-center justify-center gap-2 transition-all
                   ${walletDetected
-                    ? 'bg-reads-green text-white active:scale-95'
+                    ? 'bg-reads-green text-white active:scale-95 shadow-reads-green'
                     : 'bg-gray-100 text-reads-muted cursor-not-allowed'}`}
               >
                 <span>₳</span>
                 {walletDetected
-                  ? `Sign & Claim ${voucher.amount} $READS`
+                  ? `Sign & Claim ${voucher.amount?.toLocaleString()} $READS`
                   : 'Wallet Required'}
               </button>
             )}
@@ -335,6 +372,9 @@ export default function ClaimPage() {
             </div>
             <div className="text-center space-y-1">
               <p className="font-black text-reads-navy">{STEPS[step]}</p>
+              {step === 'building' && (
+                <p className="text-reads-muted text-xs">Preparing your transaction…</p>
+              )}
               {step === 'signing' && (
                 <p className="text-reads-muted text-xs">Your wallet app will open for approval</p>
               )}
@@ -343,10 +383,14 @@ export default function ClaimPage() {
               )}
             </div>
             <div className="flex gap-1.5">
-              {['connecting','signing','submitting'].map((s, i) => (
-                <div key={s} className={`w-2 h-2 rounded-full transition-all
-                  ${['connecting','signing','submitting'].indexOf(step) >= i
-                    ? 'bg-reads-green' : 'bg-gray-200'}`} />
+              {['connecting', 'building', 'signing', 'submitting'].map((s, i) => (
+                <div
+                  key={s}
+                  className={`w-2 h-2 rounded-full transition-all
+                    ${['connecting', 'building', 'signing', 'submitting'].indexOf(step) >= i
+                      ? 'bg-reads-green'
+                      : 'bg-gray-200'}`}
+                />
               ))}
             </div>
           </div>
@@ -360,7 +404,7 @@ export default function ClaimPage() {
             </div>
             <div className="space-y-1">
               <p className="font-black text-reads-navy text-xl">
-                {voucher?.amount} $READS Claimed!
+                {voucher?.amount?.toLocaleString()} $READS Claimed!
               </p>
               <p className="text-reads-muted text-sm">
                 Tokens sent to your Cardano wallet
@@ -369,14 +413,17 @@ export default function ClaimPage() {
             {txHash && (
               <a
                 href={`https://preprod.cardanoscan.io/transaction/${txHash}`}
-                target="_blank" rel="noreferrer"
+                target="_blank"
+                rel="noreferrer"
                 className="flex items-center gap-1.5 text-reads-green text-xs font-bold"
               >
                 View on Cardanoscan <ExternalLink size={12} />
               </a>
             )}
-            <a href="/"
-              className="w-full py-3 rounded-2xl bg-reads-navy text-white font-bold text-sm text-center block">
+            <a
+              href="/"
+              className="w-full py-3 rounded-2xl bg-reads-navy text-white font-bold text-sm text-center block"
+            >
               Back to $READS
             </a>
           </div>
@@ -385,15 +432,17 @@ export default function ClaimPage() {
         {/* Error */}
         {step === 'error' && (
           <div className="flex flex-col items-center gap-4 py-6 text-center">
-            <div className="w-16 h-16 rounded-3xl bg-red-50 flex items-center justify-center">
+            <div className="w-16 h-16 rounded-3xl bg-reads-red-bg flex items-center justify-center">
               <XCircle size={28} className="text-reads-red" />
             </div>
             <div className="space-y-1">
               <p className="font-black text-reads-navy">Claim Failed</p>
               <p className="text-reads-muted text-xs whitespace-pre-line">{error}</p>
             </div>
-            <button onClick={() => setStep('ready')}
-              className="w-full py-3 rounded-2xl bg-gray-100 text-reads-navy font-bold text-sm">
+            <button
+              onClick={() => { setError(''); setStep('ready'); }}
+              className="w-full py-3 rounded-2xl bg-gray-100 text-reads-navy font-bold text-sm"
+            >
               Try Again
             </button>
           </div>
