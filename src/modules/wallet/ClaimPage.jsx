@@ -20,9 +20,10 @@ const loadMesh = async () => {
       if (document.querySelector('#libsodium-script')) { resolve(); return; }
       const s = document.createElement('script');
       s.id  = 'libsodium-script';
-      s.src = 'https://cdnjs.cloudflare.com/ajax/libs/libsodium-wrappers-sumo/0.7.15/libsodium-wrappers-sumo.min.js';
+      // Served from same origin to avoid COEP cross-origin blocking
+      s.src = '/libsodium.js';
       s.onload  = resolve;
-      s.onerror = () => reject(new Error('Failed to load libsodium from CDN'));
+      s.onerror = () => reject(new Error('libsodium failed to load — ensure public/libsodium.js is deployed'));
       document.head.appendChild(s);
     });
     if (window.sodium?.ready) await window.sodium.ready;
