@@ -298,7 +298,6 @@ function LessonsSection() {
       quiz_questions_per_attempt: lesson.quiz_questions_per_attempt ?? null,
       quiz_min_read_secs: lesson.quiz_min_read_secs ?? 30,
       quiz_shuffle: lesson.quiz_shuffle ?? true,
-      school_id: lesson.school_id || null,
     });
   };
 
