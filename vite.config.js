@@ -61,11 +61,11 @@ export default defineConfig({
   build: {
     target: 'esnext',
     chunkSizeWarningLimit: 6000,
-    rollupOptions: {
-      external: [
-        'crypto', 'stream', 'events', 'buffer', 'path', 'fs', 'os',
-      ],
-    },
+    // No externals — all npm packages must be bundled.
+    // Only true Node built-ins (never present in the browser) should be
+    // external, but Vite already handles those via its own Node polyfill
+    // logic, so we don't need to list them here.
+    rollupOptions: {},
   },
 
   optimizeDeps: {
@@ -75,11 +75,11 @@ export default defineConfig({
   resolve: {
     alias: {
       // libsodium-wrappers-sumo ships a broken ESM build that references
-      // a WASM file via relative import — Rollup cannot resolve it at
-      // build time. We alias it to a local stub for the build; at runtime
-      // on desktop the dynamic import() in ClaimPage loads @meshsdk/core
-      // which will use its own bundled copy.
+      // a WASM file via relative import Rollup cannot resolve at build time.
+      // Stub it out — the real crypto runs inside @meshsdk/core at runtime
+      // on desktop only (ClaimPage dynamic-imports Mesh on wallet click).
       'libsodium-wrappers-sumo': path.resolve(__dirname, 'src/libsodium-stub.js'),
+      // Node polyfills for packages that reference them
       stream: 'stream-browserify',
       events: 'events',
       buffer: 'buffer',
