@@ -186,12 +186,16 @@ export default function ClaimPage() {
       // 8. Compose the asset id
       const assetUnit = cd.policy_id + cd.asset_name_hex;
 
-      // 9. Build tx with Mesh — it handles CBOR, witnesses, script data hash
-      // sendValue expects Mesh Asset[] format: [{ unit, quantity }, ...]
-      const outputValue = [
-        { unit: 'lovelace',  quantity: '2000000' },
-        { unit: assetUnit,   quantity: String(cd.amount) },
-      ];
+      // 9. Build tx with Mesh
+      // sendValue(addr, UTxO.output) — pass the full UTxO output shape
+      // so Mesh's internal .amount read doesn't blow up.
+      const outputValue = {
+        address: studentAddress,
+        amount: [
+          { unit: 'lovelace', quantity: '2000000' },
+          { unit: assetUnit,  quantity: String(cd.amount) },
+        ],
+      };
       dbg('outputValue', outputValue);
       const tx = new Transaction({ initiator: wallet })
         .redeemValue({
