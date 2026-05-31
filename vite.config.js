@@ -13,6 +13,9 @@ export default defineConfig({
       registerType: 'autoUpdate',
       includeAssets: ['favicon.ico', 'apple-touch-icon.png', 'pwa-192x192.png', 'pwa-512x512.png'],
       workbox: {
+        // Mesh + CSL bundle exceeds the default 2 MiB Workbox limit.
+        // Raise to 6 MiB to cover the ~3.8 MB JS chunk and the ~5.4 MB WASM.
+        maximumFileSizeToCacheInBytes: 6 * 1024 * 1024,
         globPatterns: ['**/*.{js,css,html,ico,png,svg,woff2}'],
         globIgnores: ['**/*.wasm', 'sw.js', 'workbox-*.js'],
         runtimeCaching: [
@@ -53,18 +56,12 @@ export default defineConfig({
     },
   },
 
-  // Tell Vite/Rollup not to bundle these Node/native modules that
-  // Mesh depends on but the browser doesn't need (or can't use).
-  // libsodium-wrappers-sumo ships its WASM binary as a side-loaded
-  // file — Rollup cannot resolve it; exclude the whole package and
-  // let Mesh load it dynamically at runtime via its own lazy import.
   build: {
     target: 'esnext',
+    chunkSizeWarningLimit: 6000,
     rollupOptions: {
       external: [
-        // libsodium WASM — Mesh loads this lazily; Rollup must not bundle it
         'libsodium-wrappers-sumo',
-        // Node built-ins that leak through some Mesh transitive deps
         'crypto',
         'stream',
         'events',
@@ -80,11 +77,8 @@ export default defineConfig({
     exclude: ['@meshsdk/core', '@meshsdk/react', 'libsodium-wrappers-sumo'],
   },
 
-  // Stub Node built-ins for browser — prevents "Module externalized" warnings
-  // from becoming hard errors in some Vite versions
   resolve: {
     alias: {
-      // empty shims so imports don't crash at parse time
       stream: 'stream-browserify',
       events: 'events',
       buffer: 'buffer',
