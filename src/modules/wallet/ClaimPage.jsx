@@ -187,16 +187,19 @@ export default function ClaimPage() {
       const assetUnit = cd.policy_id + cd.asset_name_hex;
 
       // 9. Build tx with Mesh — it handles CBOR, witnesses, script data hash
+      // sendValue expects Mesh Asset[] format: [{ unit, quantity }, ...]
+      const outputValue = [
+        { unit: 'lovelace',  quantity: '2000000' },
+        { unit: assetUnit,   quantity: String(cd.amount) },
+      ];
+      dbg('outputValue', outputValue);
       const tx = new Transaction({ initiator: wallet })
         .redeemValue({
           value:    scriptUtxo,
           script:   script,
           redeemer: redeemer,
         })
-        .sendValue(
-          studentAddress,
-          { lovelace: '2000000', [assetUnit]: String(cd.amount) }
-        )
+        .sendValue(studentAddress, outputValue)
         .setTimeToExpire(String(cd.expires_slot))
         .setRequiredSigners([studentAddress]);
 
