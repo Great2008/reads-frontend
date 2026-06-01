@@ -21,7 +21,11 @@ export default function ClaimPage() {
       const params  = new URLSearchParams(window.location.search);
       const encoded = params.get('voucher');
       if (!encoded) { setError('Missing voucher parameter in URL.'); setStep('error'); return; }
-      const v = JSON.parse(atob(encoded));
+      // Inject JWT from URL into localStorage so API calls are authenticated
+      const urlToken = params.get('token');
+      if (urlToken) localStorage.setItem('access_token', decodeURIComponent(urlToken));
+      // URL uses encodeURIComponent(JSON.stringify(...)) — not base64
+      const v = JSON.parse(decodeURIComponent(encoded));
       if (!v.reward_id || !v.amount || !v.platform_signature) {
         setError('Invalid or incomplete voucher.'); setStep('error'); return;
       }
