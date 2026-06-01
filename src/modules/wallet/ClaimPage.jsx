@@ -1,192 +1,67 @@
 // ClaimPage.jsx
-// Standalone page at /claim?voucher=...
-// Uses Mesh SDK to build + sign + submit the claim tx.
-// Mesh bundles the same CSL as Eternl — no CBOR tag mismatches possible.
+// Option 4: Platform signs + submits the tx server-side.
+// No wallet connection needed — tokens go to the address linked in the user's profile.
 
 import { useState, useEffect } from 'react';
-import { Loader2, CheckCircle, XCircle, ExternalLink, Copy } from 'lucide-react';
+import { CheckCircle, XCircle, ExternalLink, Loader2 } from 'lucide-react';
 import { api } from '../../services/api.js';
 
-// Mesh + libsodium are NOT imported at the top level — the ~4 MB bundle
-// crashes on plain mobile browsers. On desktop (Eternl DApp browser) we:
-//   1. Load libsodium-wrappers-sumo from CDN (it works fine as a script tag)
-//   2. Wait for sodium.ready
-//   3. Inject it as globalThis.libsodium so @meshsdk/core can find it
-//   4. Then dynamically import @meshsdk/core
-const loadMesh = async () => {
-  // Inject libsodium from CDN if not already present
-  if (!globalThis._sodiumLoaded) {
-    await new Promise((resolve, reject) => {
-      if (document.querySelector('#libsodium-script')) { resolve(); return; }
-      const s = document.createElement('script');
-      s.id  = 'libsodium-script';
-      // Served from same origin to avoid COEP cross-origin blocking
-      s.src = '/libsodium.js';
-      s.onload  = resolve;
-      s.onerror = () => reject(new Error('libsodium failed to load — ensure public/libsodium.js is deployed'));
-      document.head.appendChild(s);
-    });
-    if (window.sodium?.ready) await window.sodium.ready;
-    globalThis.libsodium = window.sodium;
-    globalThis._sodiumLoaded = true;
-  }
-  return import('@meshsdk/core');
-};
-
-const API_URL = (import.meta.env.VITE_API_URL || '') + '/api';
-const WALLETS  = ['eternl', 'nami', 'typhon', 'vespr', 'flint'];
-
-const STEPS = {
-  loading:    'Loading voucher…',
-  ready:      'Ready to claim',
-  connecting: 'Connecting wallet…',
-  building:   'Building transaction…',
-  signing:    'Waiting for signature…',
-  submitting: 'Submitting to blockchain…',
-  confirmed:  'Tokens claimed!',
-  error:      'Something went wrong',
-};
+const CARDANOSCAN = 'https://preprod.cardanoscan.io/transaction/';
 
 export default function ClaimPage() {
-  const [step, setStep]         = useState('loading');
+  const [step, setStep]         = useState('loading');   // loading|ready|claiming|confirmed|error|login
   const [voucher, setVoucher]   = useState(null);
   const [error, setError]       = useState('');
   const [txHash, setTxHash]     = useState('');
   const [needsLogin, setNeedsLogin] = useState(false);
-  const [debugLog, setDebugLog] = useState([]);
-  const [showDebug, setShowDebug] = useState(false);
 
-  const dbg = (label, data) => {
-    const entry = `[${new Date().toISOString().slice(11,23)}] ${label}`
-      + (data !== undefined ? ': ' + JSON.stringify(data, null, 2) : '');
-    console.log(entry);
-    setDebugLog(prev => [...prev, entry]);
-  };
-
-  // ── Parse voucher from URL ──────────────────────────────────────────────────
+  // ── Parse voucher from URL ────────────────────────────────────────────────
   useEffect(() => {
-    const params   = new URLSearchParams(window.location.search);
-    const raw      = params.get('voucher');
-    const urlToken = params.get('token');
-
-    if (!raw) {
-      setError('No voucher found in URL.');
-      setStep('error');
-      return;
-    }
-
     try {
-      const v = JSON.parse(decodeURIComponent(raw));
+      const params  = new URLSearchParams(window.location.search);
+      const encoded = params.get('voucher');
+      if (!encoded) { setError('Missing voucher parameter in URL.'); setStep('error'); return; }
+      const v = JSON.parse(atob(encoded));
       if (!v.reward_id || !v.amount || !v.platform_signature) {
-        throw new Error('Invalid voucher format');
+        setError('Invalid or incomplete voucher.'); setStep('error'); return;
       }
       setVoucher(v);
-
-      if (urlToken) {
-        localStorage.setItem('access_token', decodeURIComponent(urlToken));
-      }
-
-      const token = urlToken || localStorage.getItem('access_token');
-      if (!token) setNeedsLogin(true);
-
       setStep('ready');
     } catch {
-      setError('Invalid voucher data. Please go back and try again.');
-      setStep('error');
+      setError('Could not parse voucher. The link may be corrupted.'); setStep('error');
     }
   }, []);
 
-  // ── Main claim handler ──────────────────────────────────────────────────────
+  // ── Check auth ────────────────────────────────────────────────────────────
+  useEffect(() => {
+    if (step !== 'ready') return;
+    api.auth.me().catch(() => setNeedsLogin(true));
+  }, [step]);
+
+  const handleLogin = () => {
+    const returnUrl = encodeURIComponent(window.location.href);
+    window.location.href = `/?redirect=${returnUrl}`;
+  };
+
+  // ── Claim ─────────────────────────────────────────────────────────────────
   const handleClaim = async () => {
     try {
-      dbg('handleClaim started', { wallets: Object.keys(window.cardano || {}), voucherAmount: voucher?.amount });
+      setStep('claiming');
+      setError('');
 
-      // 1. Detect & connect wallet
-      setStep('connecting');
-      const walletName = WALLETS.find(w => window.cardano?.[w]);
-      dbg('walletName detected', walletName);
-      if (!walletName) {
-        throw new Error(
-          'No Cardano wallet detected.\n' +
-          'Open this page inside Eternl → DApp Browser tab, or use desktop Eternl/Nami.'
-        );
-      }
+      // Step 1: issue voucher
+      await api.wallet.issueVoucher(voucher.reward_id);
 
-      // Load only BrowserWallet — tx building moved to backend (pycardano)
-      dbg('loading Mesh...');
-      const { BrowserWallet } = await loadMesh();
-      dbg('Mesh loaded', { BrowserWallet: typeof BrowserWallet });
+      // Step 2: platform signs + submits tx — no wallet needed
+      const result = await api.wallet.platformClaim({ reward_id: voucher.reward_id });
 
-      const wallet = await BrowserWallet.enable(walletName);
-      dbg('wallet enabled', { isNull: wallet == null });
-      if (!wallet) throw new Error('Failed to connect to wallet. Please unlock it and try again.');
-
-      // 2. Get student address from wallet
-      const studentAddress = await wallet.getChangeAddress();
-      dbg('studentAddress', studentAddress);
-      if (!studentAddress) throw new Error('Could not read address from wallet. Please try again.');
-
-      // 3. Backend builds the unsigned tx CBOR using pycardano + Blockfrost
-      //    This avoids all Mesh UTxO processing bugs on mobile
-      setStep('building');
-      dbg('requesting backend tx build...');
-      const built = await api.wallet.buildClaimTx({
-        reward_id:          voucher.reward_id,
-        student_address:    studentAddress,
-        amount:             voucher.amount,
-        expires_slot:       voucher.expires_slot,
-        platform_signature: voucher.platform_signature,
-        platform_vkey:      voucher.platform_vkey,
-        student_pkh:        '',
-      });
-      dbg('built', { hasCbor: !!(built?.tx_cbor), len: built?.tx_cbor?.length });
-      if (!built?.tx_cbor) throw new Error('Backend failed to build transaction. Please try again.');
-
-      const unsignedTx = built.tx_cbor;
-
-      // 4. Ask wallet to sign
-      setStep('signing');
-      let signedTx;
-      try {
-        signedTx = await wallet.signTx(unsignedTx, true);
-      } catch (signErr) {
-        const info = signErr?.info || signErr?.message || String(signErr);
-        if (
-          info.toLowerCase().includes('cancel') ||
-          info.toLowerCase().includes('declined') ||
-          signErr?.code === 2
-        ) {
-          setError('Transaction cancelled. You can try again.');
-          setStep('ready');
-          return;
-        }
-        throw new Error(`Wallet signing failed: ${info}`);
-      }
-
-      // 11. Submit via backend → Blockfrost
-      setStep('submitting');
-      const result = await api.wallet.submitClaimTx({
-        reward_id:       voucher.reward_id,
-        tx_cbor:         signedTx,
-        witness_set:     '',          // not needed — Mesh builds complete tx
-        student_address: studentAddress,
-      });
-
+      if (!result?.tx_hash) throw new Error('No transaction hash returned from server.');
       setTxHash(result.tx_hash);
       setStep('confirmed');
-
     } catch (err) {
-      dbg('CAUGHT ERROR', { msg: err?.message, stack: err?.stack ? err.stack.slice(0,800) : null });
       const msg = err?.message || 'Unknown error';
-      if (msg === 'SESSION_EXPIRED' || msg.includes('SESSION_EXPIRED')) {
-        localStorage.removeItem('access_token');
+      if (msg.includes('401') || msg.toLowerCase().includes('unauthorized')) {
         setNeedsLogin(true);
-        setStep('ready');
-      } else if (
-        msg.toLowerCase().includes('cancel') ||
-        msg.toLowerCase().includes('declined')
-      ) {
-        setError('Transaction cancelled. You can try again.');
         setStep('ready');
       } else {
         setError(msg);
@@ -195,65 +70,28 @@ export default function ClaimPage() {
     }
   };
 
-  // ── Copy URL helper ─────────────────────────────────────────────────────────
-  const copyUrl = () => navigator.clipboard.writeText(window.location.href);
+  const copyTx = () => navigator.clipboard.writeText(txHash).catch(() => {});
 
-  const walletDetected = WALLETS.find(w => window.cardano?.[w]);
-  const isProcessing   = ['connecting', 'building', 'signing', 'submitting'].includes(step);
-
-  // ── Embedded login ──────────────────────────────────────────────────────────
-  const [loginEmail,    setLoginEmail]    = useState('');
-  const [loginPassword, setLoginPassword] = useState('');
-  const [loginLoading,  setLoginLoading]  = useState(false);
-  const [loginError,    setLoginError]    = useState('');
-
-  const handleLogin = async () => {
-    if (!loginEmail || !loginPassword) {
-      setLoginError('Enter your email and password.');
-      return;
-    }
-    setLoginLoading(true);
-    setLoginError('');
-    try {
-      const res  = await fetch(`${API_URL}/auth/login`, {
-        method:  'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body:    JSON.stringify({ email: loginEmail, password: loginPassword }),
-      });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.detail || 'Login failed');
-      localStorage.setItem('access_token', data.access_token);
-      if (data.refresh_token) localStorage.setItem('refresh_token', data.refresh_token);
-      setNeedsLogin(false);
-      setLoginEmail('');
-      setLoginPassword('');
-      setStep('ready');
-    } catch (e) {
-      setLoginError(e.message);
-    } finally {
-      setLoginLoading(false);
-    }
-  };
-
-  // ── Render ──────────────────────────────────────────────────────────────────
+  // ── Render ────────────────────────────────────────────────────────────────
   return (
     <div className="min-h-screen bg-reads-cream flex flex-col items-center justify-center p-4">
 
-      {/* Logo */}
-      <div className="mb-8 text-center">
+      {/* Header */}
+      <div className="text-center mb-6">
         <div className="w-16 h-16 bg-reads-navy rounded-3xl flex items-center justify-center mx-auto mb-3 shadow-lg">
           <span className="text-reads-gold font-black text-2xl">₳</span>
         </div>
-        <p className="font-black text-reads-navy text-xl">$READS Claim</p>
-        <p className="text-reads-muted text-sm">Cardano Learn-to-Earn</p>
+        <h1 className="font-black text-reads-navy text-2xl">$READS Claim</h1>
+        <p className="text-reads-muted text-sm mt-1">Cardano Learn-to-Earn</p>
       </div>
 
-      <div className="w-full max-w-sm bg-white rounded-3xl shadow-reads-card p-6 space-y-5">
+      {/* Card */}
+      <div className="bg-white rounded-3xl shadow-lg p-6 w-full max-w-sm">
 
         {/* Loading */}
         {step === 'loading' && (
-          <div className="flex flex-col items-center gap-3 py-6">
-            <Loader2 size={32} className="animate-spin text-reads-green" />
+          <div className="flex flex-col items-center gap-3 py-8">
+            <Loader2 className="w-10 h-10 text-reads-navy animate-spin" />
             <p className="text-reads-muted text-sm">Loading voucher…</p>
           </div>
         )}
@@ -261,207 +99,102 @@ export default function ClaimPage() {
         {/* Ready */}
         {step === 'ready' && voucher && (
           <>
-            <div className="space-y-1">
+            <div className="space-y-1 mb-4">
               <p className="font-black text-reads-navy text-lg">Claim Your Tokens</p>
-              <p className="text-reads-muted text-sm">Verify the details and sign with your wallet</p>
+              <p className="text-reads-muted text-sm">Tokens will be sent to your linked Cardano address.</p>
             </div>
 
-            {/* Voucher details */}
-            <div className="bg-reads-cream rounded-2xl p-4 space-y-3">
+            {/* Details */}
+            <div className="bg-reads-cream rounded-2xl p-4 space-y-2 mb-5 text-sm">
               {[
                 ['Amount',  `${voucher.amount?.toLocaleString()} $READS`],
-                ['Reward',  voucher.description || 'Quiz/Tournament reward'],
+                ['Reward',  voucher.description || 'Learn-to-Earn reward'],
                 ['Expires', `Slot ${voucher.expires_slot?.toLocaleString()}`],
                 ['Network', 'Cardano Preprod'],
-              ].map(([label, val]) => (
-                <div key={label} className="flex justify-between items-center">
-                  <span className="text-reads-muted text-xs">{label}</span>
-                  <span className="text-reads-navy font-bold text-xs text-right">{val}</span>
+              ].map(([k, v]) => (
+                <div key={k} className="flex justify-between gap-2">
+                  <span className="text-reads-muted">{k}</span>
+                  <span className="font-bold text-reads-navy text-right">{v}</span>
                 </div>
               ))}
             </div>
 
-            {/* Embedded login */}
-            {needsLogin && (
+            {needsLogin ? (
               <div className="space-y-3">
-                <div className="bg-amber-50 border border-amber-100 rounded-2xl px-4 py-3">
-                  <p className="text-amber-700 text-xs font-semibold">
-                    Log in to $READS to claim your tokens
-                  </p>
-                </div>
-                <div className="space-y-2">
-                  <input
-                    type="email"
-                    placeholder="Email address"
-                    value={loginEmail}
-                    onChange={e => setLoginEmail(e.target.value)}
-                    className="w-full border border-gray-200 rounded-2xl px-4 py-3 text-sm outline-none focus:border-reads-green transition-colors"
-                  />
-                  <input
-                    type="password"
-                    placeholder="Password"
-                    value={loginPassword}
-                    onChange={e => setLoginPassword(e.target.value)}
-                    onKeyDown={e => e.key === 'Enter' && handleLogin()}
-                    className="w-full border border-gray-200 rounded-2xl px-4 py-3 text-sm outline-none focus:border-reads-green transition-colors"
-                  />
-                  {loginError && (
-                    <p className="text-reads-red text-xs px-1">{loginError}</p>
-                  )}
-                  <button
-                    onClick={handleLogin}
-                    disabled={loginLoading}
-                    className="w-full bg-reads-navy text-white font-bold text-sm py-3.5 rounded-2xl flex items-center justify-center gap-2 active:scale-95 transition-transform disabled:opacity-60"
-                  >
-                    {loginLoading
-                      ? <Loader2 size={16} className="animate-spin" />
-                      : null}
-                    {loginLoading ? 'Logging in…' : 'Log In & Continue'}
-                  </button>
-                </div>
-              </div>
-            )}
-
-            {/* No wallet warning */}
-            {!walletDetected && !needsLogin && (
-              <div className="bg-blue-50 border border-blue-100 rounded-2xl p-3 space-y-2">
-                <p className="text-blue-700 text-xs font-semibold">No wallet detected</p>
-                <p className="text-blue-600 text-xs">
-                  Open this page inside <strong>Eternl mobile</strong> → DApp Browser tab,
-                  or use a desktop browser with Eternl/Nami installed.
-                </p>
-                <button
-                  onClick={copyUrl}
-                  className="flex items-center gap-1.5 text-blue-600 text-xs font-bold"
-                >
-                  <Copy size={12} /> Copy this page URL
+                <p className="text-reads-muted text-sm text-center">Log in to claim your tokens.</p>
+                <button onClick={handleLogin}
+                  className="w-full bg-reads-navy text-white font-black py-4 rounded-2xl">
+                  Log In to Claim
                 </button>
               </div>
-            )}
-
-            {/* Claim button */}
-            {!needsLogin && (
-              <button
-                onClick={handleClaim}
-                disabled={!walletDetected}
-                className={`w-full py-4 rounded-2xl font-black text-sm flex items-center justify-center gap-2 transition-all
-                  ${walletDetected
-                    ? 'bg-reads-green text-white active:scale-95 shadow-reads-green'
-                    : 'bg-gray-100 text-reads-muted cursor-not-allowed'}`}
-              >
-                <span>₳</span>
-                {walletDetected
-                  ? `Sign & Claim ${voucher.amount?.toLocaleString()} $READS`
-                  : 'Wallet Required'}
+            ) : (
+              <button onClick={handleClaim}
+                className="w-full bg-reads-green text-white font-black py-4 rounded-2xl flex items-center justify-center gap-2 text-base shadow-md">
+                <span>✦</span>
+                Claim {voucher.amount?.toLocaleString()} $READS
               </button>
             )}
-          {/* ── Debug Panel ─────────────────────────────── */}
-          <div className="mt-3">
-            <button
-              onClick={() => setShowDebug(v => !v)}
-              className="w-full text-xs text-reads-muted font-mono py-1.5 border border-dashed border-gray-300 rounded-xl"
-            >
-              {showDebug ? '▲ Hide Debug Log' : '▼ Show Debug Log'} ({debugLog.length})
-            </button>
-            {showDebug && (
-              <div className="mt-2 bg-gray-950 text-green-400 font-mono text-xs rounded-xl p-3 max-h-64 overflow-y-auto space-y-1 text-left">
-                {debugLog.length === 0
-                  ? <p className="text-gray-500">No entries yet — press Sign &amp; Claim to start.</p>
-                  : debugLog.map((e, i) => <pre key={i} className="whitespace-pre-wrap break-all">{e}</pre>)
-                }
-              </div>
-            )}
-          </div>
-          </>
 
+            <p className="text-xs text-reads-muted text-center mt-3">
+              No wallet app needed — tokens are sent directly to your linked address.
+            </p>
+          </>
         )}
 
-        {/* Processing */}
-        {isProcessing && (
+        {/* Claiming */}
+        {step === 'claiming' && (
           <div className="flex flex-col items-center gap-4 py-8">
-            <div className="w-16 h-16 rounded-3xl bg-reads-green-bg flex items-center justify-center">
-              <Loader2 size={28} className="animate-spin text-reads-green" />
-            </div>
-            <div className="text-center space-y-1">
-              <p className="font-black text-reads-navy">{STEPS[step]}</p>
-              {step === 'building' && (
-                <p className="text-reads-muted text-xs">Preparing your transaction…</p>
-              )}
-              {step === 'signing' && (
-                <p className="text-reads-muted text-xs">Your wallet app will open for approval</p>
-              )}
-              {step === 'submitting' && (
-                <p className="text-reads-muted text-xs">Broadcasting to Cardano network…</p>
-              )}
-            </div>
-            <div className="flex gap-1.5">
-              {['connecting', 'building', 'signing', 'submitting'].map((s, i) => (
-                <div
-                  key={s}
-                  className={`w-2 h-2 rounded-full transition-all
-                    ${['connecting', 'building', 'signing', 'submitting'].indexOf(step) >= i
-                      ? 'bg-reads-green'
-                      : 'bg-gray-200'}`}
-                />
-              ))}
-            </div>
+            <Loader2 className="w-12 h-12 text-reads-navy animate-spin" />
+            <p className="font-black text-reads-navy text-lg">Processing Claim…</p>
+            <p className="text-reads-muted text-sm text-center">
+              Building and submitting your transaction. This takes ~10 seconds.
+            </p>
           </div>
         )}
 
         {/* Confirmed */}
         {step === 'confirmed' && (
-          <div className="flex flex-col items-center gap-4 py-6 text-center">
-            <div className="w-20 h-20 rounded-3xl bg-reads-green-bg flex items-center justify-center">
-              <CheckCircle size={36} className="text-reads-green" />
+          <div className="flex flex-col items-center gap-4 py-4 text-center">
+            <div className="w-16 h-16 bg-green-100 rounded-full flex items-center justify-center">
+              <CheckCircle className="w-10 h-10 text-reads-green" />
             </div>
-            <div className="space-y-1">
-              <p className="font-black text-reads-navy text-xl">
-                {voucher?.amount?.toLocaleString()} $READS Claimed!
-              </p>
-              <p className="text-reads-muted text-sm">
-                Tokens sent to your Cardano wallet
-              </p>
-            </div>
-            {txHash && (
-              <a
-                href={`https://preprod.cardanoscan.io/transaction/${txHash}`}
-                target="_blank"
-                rel="noreferrer"
-                className="flex items-center gap-1.5 text-reads-green text-xs font-bold"
-              >
-                View on Cardanoscan <ExternalLink size={12} />
+            <p className="font-black text-reads-navy text-xl">
+              {voucher?.amount?.toLocaleString()} $READS Claimed!
+            </p>
+            <p className="text-reads-muted text-sm">
+              Tokens are on their way to your Cardano wallet. Allow ~30 seconds for confirmation.
+            </p>
+            <div className="flex gap-2 w-full mt-2">
+              <button onClick={copyTx}
+                className="flex-1 border border-reads-navy text-reads-navy font-bold py-3 rounded-2xl text-sm">
+                Copy TX
+              </button>
+              <a href={`${CARDANOSCAN}${txHash}`} target="_blank" rel="noopener noreferrer"
+                className="flex-1 bg-reads-navy text-white font-bold py-3 rounded-2xl text-sm flex items-center justify-center gap-1">
+                View <ExternalLink className="w-3.5 h-3.5" />
               </a>
-            )}
-            <a
-              href="/"
-              className="w-full py-3 rounded-2xl bg-reads-navy text-white font-bold text-sm text-center block"
-            >
-              Back to $READS
-            </a>
+            </div>
           </div>
         )}
 
         {/* Error */}
         {step === 'error' && (
-          <div className="flex flex-col items-center gap-4 py-6 text-center">
-            <div className="w-16 h-16 rounded-3xl bg-reads-red-bg flex items-center justify-center">
-              <XCircle size={28} className="text-reads-red" />
+          <div className="flex flex-col items-center gap-4 py-4 text-center">
+            <div className="w-16 h-16 bg-red-100 rounded-full flex items-center justify-center">
+              <XCircle className="w-10 h-10 text-red-500" />
             </div>
-            <div className="space-y-1">
-              <p className="font-black text-reads-navy">Claim Failed</p>
-              <p className="text-reads-muted text-xs whitespace-pre-line">{error}</p>
-            </div>
-            <button
-              onClick={() => { setError(''); setStep('ready'); }}
-              className="w-full py-3 rounded-2xl bg-gray-100 text-reads-navy font-bold text-sm"
-            >
+            <p className="font-black text-reads-navy">Claim Failed</p>
+            <p className="text-reads-muted text-sm break-words">{error}</p>
+            <button onClick={() => { setError(''); setStep('ready'); }}
+              className="w-full bg-gray-100 text-reads-navy font-bold py-3 rounded-2xl text-sm">
               Try Again
             </button>
           </div>
         )}
+
       </div>
 
-      <p className="text-reads-muted text-[10px] mt-6 text-center">
+      <p className="text-xs text-reads-muted mt-6">
         $READS · Cardano Preprod · Powered by Aiken
       </p>
     </div>

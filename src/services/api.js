@@ -334,7 +334,9 @@ export const wallet = {
   tokenInfo: () => get('/wallet/token-info'),
 
   // Backend-built tx (pycardano) — replaces Mesh frontend tx building
-  buildClaimTx:  (data) => post('/wallet/rewards/build-claim-tx', data),
+  buildClaimTx:    (data) => post('/wallet/rewards/build-claim-tx', data),
+  // Option 4: platform signs + submits — no wallet interaction needed
+  platformClaim:   (data) => post('/wallet/rewards/platform-claim', data),
 
   // Legacy: returns raw UTxO/script data (kept for reference)
   getClaimData: (data) => post('/wallet/rewards/claim-data', data),
