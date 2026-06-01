@@ -187,23 +187,18 @@ export default function ClaimPage() {
       const assetUnit = cd.policy_id + cd.asset_name_hex;
 
       // 9. Build tx with Mesh
-      // sendValue(addr, UTxO.output) — pass the full UTxO output shape
-      // so Mesh's internal .amount read doesn't blow up.
-      const outputValue = {
-        address: studentAddress,
-        amount: [
-          { unit: 'lovelace', quantity: '2000000' },
-          { unit: assetUnit,  quantity: String(cd.amount) },
-        ],
-      };
-      dbg('outputValue', outputValue);
+      // Avoid sendValue — it internally reads .amount off the value arg
+      // in a way that's broken with our data shape.
+      // sendLovelace + sendAssets have simple unambiguous signatures.
+      dbg('building tx with sendLovelace+sendAssets', { assetUnit, amount: cd.amount });
       const tx = new Transaction({ initiator: wallet })
         .redeemValue({
           value:    scriptUtxo,
           script:   script,
           redeemer: redeemer,
         })
-        .sendValue(studentAddress, outputValue)
+        .sendLovelace(studentAddress, '2000000')
+        .sendAssets(studentAddress, [{ unit: assetUnit, quantity: String(cd.amount) }])
         .setTimeToExpire(String(cd.expires_slot))
         .setRequiredSigners([studentAddress]);
 
