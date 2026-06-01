@@ -100,6 +100,7 @@ export default function ClaimPage() {
   const handleClaim = async () => {
     try {
       dbg('handleClaim started', { wallets: Object.keys(window.cardano || {}), voucherAmount: voucher?.amount });
+
       // 1. Detect & connect wallet
       setStep('connecting');
       const walletName = WALLETS.find(w => window.cardano?.[w]);
@@ -111,151 +112,39 @@ export default function ClaimPage() {
         );
       }
 
-      // Load Mesh only now — keeps the page lightweight on mobile
-      dbg('loading Mesh + libsodium...');
-      const { BrowserWallet, Transaction, BlockfrostProvider } = await loadMesh();
-      dbg('Mesh loaded', { BrowserWallet: typeof BrowserWallet, Transaction: typeof Transaction });
+      // Load only BrowserWallet — tx building moved to backend (pycardano)
+      dbg('loading Mesh...');
+      const { BrowserWallet } = await loadMesh();
+      dbg('Mesh loaded', { BrowserWallet: typeof BrowserWallet });
 
-      dbg('enabling BrowserWallet', walletName);
       const wallet = await BrowserWallet.enable(walletName);
-      dbg('wallet result', { type: typeof wallet, isNull: wallet == null });
+      dbg('wallet enabled', { isNull: wallet == null });
       if (!wallet) throw new Error('Failed to connect to wallet. Please unlock it and try again.');
 
-      // 2. Get student address (bech32 from Mesh — always valid format)
+      // 2. Get student address from wallet
       const studentAddress = await wallet.getChangeAddress();
       dbg('studentAddress', studentAddress);
       if (!studentAddress) throw new Error('Could not read address from wallet. Please try again.');
 
-      // 3. Fetch claim data from backend (UTxO, script, datum — no tx building)
+      // 3. Backend builds the unsigned tx CBOR using pycardano + Blockfrost
+      //    This avoids all Mesh UTxO processing bugs on mobile
       setStep('building');
-      const cd = await api.wallet.getClaimData({
+      dbg('requesting backend tx build...');
+      const built = await api.wallet.buildClaimTx({
         reward_id:          voucher.reward_id,
         student_address:    studentAddress,
         amount:             voucher.amount,
         expires_slot:       voucher.expires_slot,
         platform_signature: voucher.platform_signature,
         platform_vkey:      voucher.platform_vkey,
+        student_pkh:        '',
       });
-      dbg('cd response', { keys: cd ? Object.keys(cd) : null, amount: cd?.amount, student_pkh: cd?.student_pkh, utxo: cd?.utxo_tx_hash });
-      if (!cd || !cd.utxo_tx_hash) throw new Error('Invalid claim data from server. Please try again.');
+      dbg('built', { hasCbor: !!(built?.tx_cbor), len: built?.tx_cbor?.length });
+      if (!built?.tx_cbor) throw new Error('Backend failed to build transaction. Please try again.');
 
-      // 4. Student PKH derived server-side — no Mesh resolvePaymentKeyHash needed
-      const studentPkh = cd.student_pkh;
-      dbg('studentPkh', studentPkh);
-      if (!studentPkh) throw new Error('Server could not derive payment key hash from address');
+      const unsignedTx = built.tx_cbor;
 
-      // 5. Describe the script UTxO Mesh will spend
-      // Ensure all fields are the correct types Mesh expects:
-      // txHash: string, outputIndex: number, amount: [{unit:string, quantity:string}]
-      const scriptUtxo = {
-        input: {
-          txHash:      String(cd.utxo_tx_hash),
-          outputIndex: Number(cd.utxo_tx_index),
-        },
-        output: {
-          address:    String(cd.contract_address),
-          amount:     cd.utxo_amount.map(a => ({ unit: String(a.unit), quantity: String(a.quantity) })),
-          plutusData: cd.datum_cbor ? String(cd.datum_cbor) : undefined,
-        },
-      };
-      dbg('scriptUtxo', scriptUtxo);
-
-      // 6. Describe the PlutusV3 script
-      const script = {
-        code:    cd.script_cbor,
-        version: 'V3',
-      };
-
-      // 7. Build the redeemer — Mesh handles all CBOR encoding internally.
-      //    field order matches Aiken ClaimRedeemer:
-      //    { student_pkh, amount, reward_id, expires_slot, platform_signature }
-      const redeemer = {
-        data: {
-          alternative: 0,
-          fields: [
-            { bytes: String(studentPkh) },
-            { int: Number(cd.amount) },
-            { bytes: String(voucher.reward_id).replace(/-/g, '') },
-            { int: Number(cd.expires_slot) },
-            { bytes: String(voucher.platform_signature) },
-          ],
-        },
-        exUnits: {
-          mem:   500_000,
-          steps: 200_000_000,
-        },
-      };
-
-      // 8. Compose the asset id
-      const assetUnit = cd.policy_id + cd.asset_name_hex;
-
-      // 9. Fetch collateral UTxOs from wallet — required for Plutus script spending.
-      // Eternl/Nami expose getCollateral(); if empty the wallet has no pure-ADA UTxO.
-      let collateralUtxos = [];
-      try {
-        collateralUtxos = await wallet.getCollateral();
-        dbg('collateral UTxOs', collateralUtxos?.length ?? 0);
-      } catch (collErr) {
-        dbg('getCollateral() failed (non-fatal)', String(collErr));
-      }
-      if (!collateralUtxos || collateralUtxos.length === 0) {
-        throw new Error(
-          'No collateral UTxO found.\n\n'
-          + 'In Eternl: Settings → Collateral → Add Collateral.\n'
-          + 'You need at least one UTxO with only ADA (no tokens) to use as collateral.'
-        );
-      }
-
-      // 10. Fetch wallet UTxOs manually and sanitise them.
-      // Mesh internally calls wallet.getUtxos() and crashes if any UTxO has
-      // a malformed amount entry (Eternl mobile quirk). By fetching and
-      // sanitising them ourselves we prevent the toString() crash.
-      let walletUtxos = [];
-      try {
-        const raw = await wallet.getUtxos();
-        // Sanitise: ensure every amount entry has string unit + string quantity
-        walletUtxos = (raw || []).map(u => ({
-          ...u,
-          output: {
-            ...u.output,
-            amount: (u.output?.amount || []).map(a => ({
-              unit:     String(a?.unit     ?? 'lovelace'),
-              quantity: String(a?.quantity ?? '0'),
-            })),
-          },
-        }));
-        dbg('walletUtxos sanitised', walletUtxos.length);
-      } catch (utxoErr) {
-        dbg('getUtxos() failed', String(utxoErr));
-      }
-
-      const fetcher = new BlockfrostProvider(
-        import.meta.env.VITE_BLOCKFROST_KEY || '',
-        0   // 0 = preprod network index
-      );
-      dbg('fetcher created', { hasKey: !!(import.meta.env.VITE_BLOCKFROST_KEY) });
-      dbg('building tx with sendLovelace+sendAssets', { assetUnit, amount: cd.amount });
-      // Pass sanitised UTxOs so Mesh doesn't call wallet.getUtxos() itself
-      const txOpts = walletUtxos.length > 0
-        ? { initiator: wallet, fetcher, utxos: walletUtxos }
-        : { initiator: wallet, fetcher };
-      const tx = new Transaction(txOpts)
-        .redeemValue({
-          value:    scriptUtxo,
-          script:   script,
-          redeemer: redeemer,
-        })
-        .sendLovelace(studentAddress, '2000000')
-        .sendAssets(studentAddress, [{ unit: assetUnit, quantity: String(cd.amount) }])
-        .setCollateral(collateralUtxos)
-        .setTimeToExpire(String(cd.expires_slot))
-        .setRequiredSigners([studentAddress]);
-
-      dbg('building tx...');
-      const unsignedTx = await tx.build();
-      dbg('tx built OK', unsignedTx ? String(unsignedTx).slice(0,60) : null);
-
-      // 10. Ask wallet to sign (partialSign=true — Mesh already added the script witness)
+      // 4. Ask wallet to sign
       setStep('signing');
       let signedTx;
       try {
