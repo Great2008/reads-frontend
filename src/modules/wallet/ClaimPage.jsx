@@ -113,7 +113,7 @@ export default function ClaimPage() {
 
       // Load Mesh only now — keeps the page lightweight on mobile
       dbg('loading Mesh + libsodium...');
-      const { BrowserWallet, Transaction } = await loadMesh();
+      const { BrowserWallet, Transaction, BlockfrostProvider } = await loadMesh();
       dbg('Mesh loaded', { BrowserWallet: typeof BrowserWallet, Transaction: typeof Transaction });
 
       dbg('enabling BrowserWallet', walletName);
@@ -186,12 +186,32 @@ export default function ClaimPage() {
       // 8. Compose the asset id
       const assetUnit = cd.policy_id + cd.asset_name_hex;
 
-      // 9. Build tx with Mesh
-      // Avoid sendValue — it internally reads .amount off the value arg
-      // in a way that's broken with our data shape.
-      // sendLovelace + sendAssets have simple unambiguous signatures.
+      // 9. Fetch collateral UTxOs from wallet — required for Plutus script spending.
+      // Eternl/Nami expose getCollateral(); if empty the wallet has no pure-ADA UTxO.
+      let collateralUtxos = [];
+      try {
+        collateralUtxos = await wallet.getCollateral();
+        dbg('collateral UTxOs', collateralUtxos?.length ?? 0);
+      } catch (collErr) {
+        dbg('getCollateral() failed (non-fatal)', String(collErr));
+      }
+      if (!collateralUtxos || collateralUtxos.length === 0) {
+        throw new Error(
+          'No collateral UTxO found.\n\n'
+          + 'In Eternl: Settings → Collateral → Add Collateral.\n'
+          + 'You need at least one UTxO with only ADA (no tokens) to use as collateral.'
+        );
+      }
+
+      // 10. Build tx with Mesh — pass BlockfrostProvider as fetcher so
+      // Mesh can look up UTxO details needed to complete the transaction.
+      const fetcher = new BlockfrostProvider(
+        import.meta.env.VITE_BLOCKFROST_KEY || '',
+        0   // 0 = preprod network index
+      );
+      dbg('fetcher created', { hasKey: !!(import.meta.env.VITE_BLOCKFROST_KEY) });
       dbg('building tx with sendLovelace+sendAssets', { assetUnit, amount: cd.amount });
-      const tx = new Transaction({ initiator: wallet })
+      const tx = new Transaction({ initiator: wallet, fetcher })
         .redeemValue({
           value:    scriptUtxo,
           script:   script,
@@ -199,6 +219,7 @@ export default function ClaimPage() {
         })
         .sendLovelace(studentAddress, '2000000')
         .sendAssets(studentAddress, [{ unit: assetUnit, quantity: String(cd.amount) }])
+        .setCollateral(collateralUtxos)
         .setTimeToExpire(String(cd.expires_slot))
         .setRequiredSigners([studentAddress]);
 
