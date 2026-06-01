@@ -333,11 +333,13 @@ export const wallet = {
   txConfirmations: (txHash) => get(`/wallet/tx-confirmations/${txHash}`),
   tokenInfo: () => get('/wallet/token-info'),
 
-  // Mesh-based claim flow — replaces buildClaimTx
-  // Returns UTxO data, script, datum so Mesh can build the tx on the frontend
+  // Backend-built tx (pycardano) — replaces Mesh frontend tx building
+  buildClaimTx:  (data) => post('/wallet/rewards/build-claim-tx', data),
+
+  // Legacy: returns raw UTxO/script data (kept for reference)
   getClaimData: (data) => post('/wallet/rewards/claim-data', data),
 
-  // Submit the fully-signed tx CBOR built by Mesh
+  // Submit the fully-signed tx CBOR
   submitClaimTx: (data) => post('/wallet/rewards/submit-claim-tx', data),
 };
 
