@@ -206,15 +206,40 @@ export default function ClaimPage() {
         );
       }
 
-      // 10. Build tx with Mesh — pass BlockfrostProvider as fetcher so
-      // Mesh can look up UTxO details needed to complete the transaction.
+      // 10. Fetch wallet UTxOs manually and sanitise them.
+      // Mesh internally calls wallet.getUtxos() and crashes if any UTxO has
+      // a malformed amount entry (Eternl mobile quirk). By fetching and
+      // sanitising them ourselves we prevent the toString() crash.
+      let walletUtxos = [];
+      try {
+        const raw = await wallet.getUtxos();
+        // Sanitise: ensure every amount entry has string unit + string quantity
+        walletUtxos = (raw || []).map(u => ({
+          ...u,
+          output: {
+            ...u.output,
+            amount: (u.output?.amount || []).map(a => ({
+              unit:     String(a?.unit     ?? 'lovelace'),
+              quantity: String(a?.quantity ?? '0'),
+            })),
+          },
+        }));
+        dbg('walletUtxos sanitised', walletUtxos.length);
+      } catch (utxoErr) {
+        dbg('getUtxos() failed', String(utxoErr));
+      }
+
       const fetcher = new BlockfrostProvider(
         import.meta.env.VITE_BLOCKFROST_KEY || '',
         0   // 0 = preprod network index
       );
       dbg('fetcher created', { hasKey: !!(import.meta.env.VITE_BLOCKFROST_KEY) });
       dbg('building tx with sendLovelace+sendAssets', { assetUnit, amount: cd.amount });
-      const tx = new Transaction({ initiator: wallet, fetcher })
+      // Pass sanitised UTxOs so Mesh doesn't call wallet.getUtxos() itself
+      const txOpts = walletUtxos.length > 0
+        ? { initiator: wallet, fetcher, utxos: walletUtxos }
+        : { initiator: wallet, fetcher };
+      const tx = new Transaction(txOpts)
         .redeemValue({
           value:    scriptUtxo,
           script:   script,
