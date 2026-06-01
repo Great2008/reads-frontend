@@ -145,17 +145,20 @@ export default function ClaimPage() {
       if (!studentPkh) throw new Error('Server could not derive payment key hash from address');
 
       // 5. Describe the script UTxO Mesh will spend
+      // Ensure all fields are the correct types Mesh expects:
+      // txHash: string, outputIndex: number, amount: [{unit:string, quantity:string}]
       const scriptUtxo = {
         input: {
-          txHash:      cd.utxo_tx_hash,
-          outputIndex: cd.utxo_tx_index,
+          txHash:      String(cd.utxo_tx_hash),
+          outputIndex: Number(cd.utxo_tx_index),
         },
         output: {
-          address:    cd.contract_address,
-          amount:     cd.utxo_amount,   // [{unit, quantity}, ...]
-          plutusData: cd.datum_cbor,    // raw CBOR hex string
+          address:    String(cd.contract_address),
+          amount:     cd.utxo_amount.map(a => ({ unit: String(a.unit), quantity: String(a.quantity) })),
+          plutusData: cd.datum_cbor ? String(cd.datum_cbor) : undefined,
         },
       };
+      dbg('scriptUtxo', scriptUtxo);
 
       // 6. Describe the PlutusV3 script
       const script = {
@@ -170,11 +173,11 @@ export default function ClaimPage() {
         data: {
           alternative: 0,
           fields: [
-            { bytes: studentPkh },
-            { int: cd.amount },
-            { bytes: voucher.reward_id.replace(/-/g, '') },
-            { int: cd.expires_slot },
-            { bytes: voucher.platform_signature },
+            { bytes: String(studentPkh) },
+            { int: Number(cd.amount) },
+            { bytes: String(voucher.reward_id).replace(/-/g, '') },
+            { int: Number(cd.expires_slot) },
+            { bytes: String(voucher.platform_signature) },
           ],
         },
         exUnits: {
