@@ -3,7 +3,7 @@ import {
   LayoutDashboard, Users, BookOpen, ClipboardList, Wallet,
   Settings, UserPlus, Upload, Download, ChevronRight,
   School, Loader2, ArrowLeft, CheckCircle, XCircle, Edit2, Trash2, GraduationCap, Plus, FileText, AlertCircle,
-  Calendar, TrendingUp, User
+  Calendar, TrendingUp, User, UserCheck, Bell
 } from 'lucide-react';
 import { api } from '../../services/api.js';
 import SchoolPortalModule from './SchoolPortalModule.jsx';
@@ -19,6 +19,21 @@ function Overview({ stats, onNavigate }) {
         <StatCard icon={UserPlus} label="Staff" value={stats.total_staff ?? 0} color="navy" onClick={() => onNavigate('staff')} />
         <StatCard icon={GraduationCap} label="Classes" value={stats.total_classes ?? 0} color="gold" onClick={() => onNavigate('classes')} />
         <StatCard icon={BookOpen} label="School Portal" value="Manage →" color="red" onClick={() => onNavigate('portal')} />
+        {(stats.pending_requests ?? 0) > 0 && (
+          <div className="col-span-2">
+            <button onClick={() => onNavigate('requests')}
+              className="w-full flex items-center gap-3 bg-amber-50 border border-amber-200 rounded-2xl px-4 py-3">
+              <div className="w-9 h-9 bg-amber-100 rounded-xl flex items-center justify-center flex-shrink-0">
+                <Bell size={18} className="text-amber-600" />
+              </div>
+              <div className="flex-1 text-left">
+                <p className="font-bold text-amber-700 text-sm">{stats.pending_requests} Affiliation Request{stats.pending_requests !== 1 ? 's' : ''}</p>
+                <p className="text-amber-600 text-xs">Students waiting for approval</p>
+              </div>
+              <ChevronRight size={16} className="text-amber-500" />
+            </button>
+          </div>
+        )}
       </div>
     </div>
   );
@@ -688,10 +703,92 @@ function SchoolProfileSection() {
 // ── Nav items ─────────────────────────────────────────────────────────────────
 const NAV_ITEMS = [
   { key: 'overview',  label: 'Overview',  icon: LayoutDashboard },
+
+// ── Affiliation Requests Section ──────────────────────────────────────────────
+function AffiliationRequestsSection() {
+  const [requests, setRequests] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [acting, setActing] = useState(null);
+  const [toast, setToast] = useState(null);
+  const showToast = (msg, type = 'success') => { setToast({ msg, type }); setTimeout(() => setToast(null), 3000); };
+
+  const load = () => {
+    api.partner.getAffiliationRequests()
+      .then(d => setRequests(d?.requests || []))
+      .catch(() => {})
+      .finally(() => setLoading(false));
+  };
+
+  useEffect(() => { load(); }, []);
+
+  const decide = async (student_id, action, class_id) => {
+    setActing(student_id);
+    try {
+      if (action === 'approve') {
+        await api.partner.approveAffiliation(student_id, class_id || null);
+        showToast('Student approved and enrolled!');
+      } else {
+        await api.partner.rejectAffiliation(student_id);
+        showToast('Request rejected.');
+      }
+      load();
+    } catch (e) {
+      showToast(e.message || 'Failed', 'error');
+    } finally { setActing(null); }
+  };
+
+  if (loading) return <LoadingOverlay />;
+
+  return (
+    <div className="px-4 pt-2 pb-4 animate-fade-in">
+      <SectionHeader title="Affiliation Requests"
+        subtitle={requests.length === 0 ? 'No pending requests' : `${requests.length} pending`} />
+      {requests.length === 0 ? (
+        <EmptyState icon={UserCheck} title="No pending requests"
+          description="Students who use your school code to join will appear here for approval." />
+      ) : (
+        <div className="space-y-3">
+          {requests.map(r => (
+            <div key={r.id} className="reads-card px-4 py-3 space-y-3">
+              <div className="flex items-center gap-3">
+                <img src={`https://api.dicebear.com/8.x/initials/svg?seed=${encodeURIComponent(r.full_name)}&backgroundColor=16a34a&fontColor=ffffff`}
+                  alt={r.full_name} className="w-10 h-10 rounded-xl object-cover flex-shrink-0" />
+                <div className="flex-1 min-w-0">
+                  <p className="font-bold text-reads-navy text-sm truncate">{r.full_name}</p>
+                  <p className="text-reads-muted text-xs">{r.email}</p>
+                  {r.requested_class && (
+                    <p className="text-reads-muted text-xs">Requested class: <span className="font-semibold text-reads-navy">{r.requested_class}</span></p>
+                  )}
+                </div>
+                <Badge label={r.type === 'recovery' ? 'Recovery' : 'New'} variant={r.type === 'recovery' ? 'gold' : 'green'} />
+              </div>
+              <div className="flex gap-2">
+                <button onClick={() => decide(r.id, 'approve', r.requested_class_id)}
+                  disabled={acting === r.id}
+                  className="flex-1 bg-reads-green text-white font-bold py-2.5 rounded-xl text-sm flex items-center justify-center gap-1.5">
+                  {acting === r.id ? <Loader2 size={14} className="animate-spin" /> : <CheckCircle size={14} />}
+                  Approve
+                </button>
+                <button onClick={() => decide(r.id, 'reject')}
+                  disabled={acting === r.id}
+                  className="flex-1 border border-red-300 text-red-500 font-bold py-2.5 rounded-xl text-sm flex items-center justify-center gap-1.5">
+                  <XCircle size={14} /> Reject
+                </button>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+      {toast && <Toast {...toast} />}
+    </div>
+  );
+}
+
   { key: 'students',  label: 'Students',  icon: Users },
   { key: 'staff',     label: 'Staff',     icon: UserPlus },
   { key: 'classes',   label: 'Classes',   icon: GraduationCap },
   { key: 'portal',    label: 'Portal',    icon: BookOpen },
+  { key: 'requests',  label: 'Requests',  icon: UserCheck },
   { key: 'edits',      label: 'Edits',     icon: FileText },
   { key: 'sessions',   label: 'Sessions',  icon: Calendar },
   { key: 'school-profile', label: 'Profile',  icon: User },
@@ -743,6 +840,7 @@ export default function PartnerModule({ user, onLogout }) {
             {section === 'students' && <StudentsSection />}
             {section === 'staff' && <StaffSection />}
             {section === 'classes' && <ClassesSection />}
+          {section === 'requests' && <AffiliationRequestsSection />}
           {section === 'edits' && <EditRequestsSection />}
           {section === 'sessions' && <SessionsSection classes={classes} />}
           {section === 'school-profile' && <SchoolProfileSection />}

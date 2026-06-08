@@ -518,50 +518,78 @@ export const admin = {
 
 // ── Partner (School/CBT Centre) Portal ────────────────────────────────────────
 export const partner = {
-  getProfile: () => get('/partner/profile'),
-  updateProfile: (data) => patch('/partner/profile', data),
-  getDashboardStats: () => get('/partner/stats'),
-  getWallet: () => get('/partner/wallet'),
-  getTransactions: () => get('/partner/wallet/transactions'),
+  // ── Profile & Stats ──────────────────────────────────────────────────────
+  getProfile:          () => get('/partner/profile'),
+  updateProfile:       (data) => patch('/partner/profile', data),
+  getDashboardStats:   () => get('/partner/stats'),
+  getSchoolProfile:    () => get('/school/profile'),
+  updateSchoolProfile: (data) => patch('/school/profile', data),
+  getWallet:           () => get('/partner/wallet'),
+  getTransactions:     () => get('/partner/wallet/transactions'),
 
-  // School-specific
-  getStaff: () => get('/partner/school/staff'),
-  inviteStaff: (email, role) => post('/partner/school/staff/invite', { email, role }),
-  removeStaff: (staff_id) => del(`/partner/school/staff/${staff_id}`),
+  // ── Staff ─────────────────────────────────────────────────────────────────
+  getStaff:    () => get('/school/staff'),
+  inviteStaff: (email, role) => post('/school/staff/invite', { email, role }),
+  removeStaff: (staff_id) => del(`/school/staff/${staff_id}`),
+
+  // ── Students & Affiliation ────────────────────────────────────────────────
   getStudents: (params = {}) => {
     const qs = new URLSearchParams(params).toString();
-    return get(`/partner/school/students${qs ? `?${qs}` : ''}`);
+    return get(`/school/students${qs ? `?${qs}` : ''}`);
   },
+  getAffiliationRequests: () => get('/school/students/requests'),
+  approveAffiliation: (student_id, class_id = null) =>
+    post(`/school/students/requests/${student_id}/approve`, { class_id }),
+  rejectAffiliation: (student_id) =>
+    post(`/school/students/requests/${student_id}/reject`, {}),
+  deaffiliateStudent: (student_id, data) =>
+    post(`/school/students/${student_id}/deaffiliate`, data),
+  recoverAffiliation: (student_id) =>
+    post(`/school/students/${student_id}/recover`, {}),
+  promoteStudent: (student_id, data) =>
+    post(`/school/students/${student_id}/promotion`, data),
+  bulkPromote: (promotions, session_id = null) =>
+    post('/school/students/promotions/bulk', { promotions, session_id }),
+
+  // ── Classes & Subjects ────────────────────────────────────────────────────
+  getClasses:    () => get('/school/classes'),
+  createClass:   (data) => post('/school/classes', data),
+  deleteClass:   (class_id) => del(`/school/classes/${class_id}`),
+  getSubjects:   (class_id) => get(`/school/classes/${class_id}/subjects`),
+  addSubject:    (class_id, data) => post(`/school/classes/${class_id}/subjects`, data),
+  removeSubject: (subject_id) => del(`/school/subjects/${subject_id}`),
+
+  // ── Sessions ──────────────────────────────────────────────────────────────
+  getSessions:       () => get('/school/sessions'),
+  createSession:     (data) => post('/school/sessions', data),
+  setCurrentSession: (session_id) =>
+    patch(`/school/sessions/${session_id}`, { is_current: true }),
+
+  // ── Results ───────────────────────────────────────────────────────────────
   getResults: (params = {}) => {
     const qs = new URLSearchParams(params).toString();
-    return get(`/partner/school/results${qs ? `?${qs}` : ''}`);
+    return get(`/school/results${qs ? `?${qs}` : ''}`);
   },
-  getFees: () => get('/partner/school/fees'),
-  getSessions: () => get('/partner/school/sessions'),
-  getLessons: () => get('/partner/lessons'),
+
+  // ── Fees ──────────────────────────────────────────────────────────────────
+  getFees: () => get('/school/fees'),
+
+  // ── Lessons ───────────────────────────────────────────────────────────────
+  getLessons:        () => get('/school/lessons'),
   submitEditRequest: (lesson_id, data) =>
-    post(`/partner/lessons/${lesson_id}/edit-request`, data),
-  getEditRequests: () => get('/partner/lessons/edit-requests'),
+    post(`/school/lessons/${lesson_id}/edit-request`, data),
+  getEditRequests:   () => get('/school/lessons/edit-requests'),
 
-  // Classes
-  getClasses: () => get('/partner/school/classes'),
-  createClass: (data) => post('/partner/school/classes', data),
-  deleteClass: (class_id) => del(`/partner/school/classes/${class_id}`),
-
-  // CBT Centre
-  getCbtProfile: () => get('/partner/cbt/profile'),
-  getCbtStats: () => get('/partner/cbt/stats'),
-  updateCbtProfile: (data) => patch('/partner/cbt/profile', data),
-
-  // CBT Exam Windows
-  getCbtWindows: () => get('/partner/cbt/exams/windows'),
-  createCbtWindow: (data) => post('/partner/cbt/exams/windows', data),
-  updateCbtWindow: (id, data) => patch(`/partner/cbt/exams/windows/${id}`, data),
-  toggleCbtWindowStatus: (id) => patch(`/partner/cbt/exams/windows/${id}/status`, {}),
+  // ── CBT Centre ────────────────────────────────────────────────────────────
+  getCbtProfile:             () => get('/partner/cbt/profile'),
+  getCbtStats:               () => get('/partner/cbt/stats'),
+  updateCbtProfile:          (data) => patch('/partner/cbt/profile', data),
+  getCbtWindows:             () => get('/partner/cbt/exams/windows'),
+  createCbtWindow:           (data) => post('/partner/cbt/exams/windows', data),
+  updateCbtWindow:           (id, data) => patch(`/partner/cbt/exams/windows/${id}`, data),
+  toggleCbtWindowStatus:     (id) => patch(`/partner/cbt/exams/windows/${id}/status`, {}),
   getCbtWindowRegistrations: (id) => get(`/partner/cbt/exams/windows/${id}/registrations`),
 };
-
-// ── Tutor Portal ──────────────────────────────────────────────────────────────
 export const tutorPortal = {
   getProfile: () => get('/tutor/profile'),
   updateProfile: (data) => patch('/tutor/profile', data),
