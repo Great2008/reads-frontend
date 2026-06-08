@@ -702,7 +702,17 @@ function SchoolProfileSection() {
 
 // ── Nav items ─────────────────────────────────────────────────────────────────
 const NAV_ITEMS = [
-  { key: 'overview',  label: 'Overview',  icon: LayoutDashboard },
+  { key: 'overview',       label: 'Overview',  icon: LayoutDashboard },
+  { key: 'students',       label: 'Students',  icon: Users },
+  { key: 'staff',          label: 'Staff',     icon: UserPlus },
+  { key: 'classes',        label: 'Classes',   icon: GraduationCap },
+  { key: 'portal',         label: 'Portal',    icon: BookOpen },
+  { key: 'requests',       label: 'Requests',  icon: UserCheck },
+  { key: 'edits',          label: 'Edits',     icon: FileText },
+  { key: 'sessions',       label: 'Sessions',  icon: Calendar },
+  { key: 'school-profile', label: 'Profile',   icon: User },
+  { key: 'wallet',         label: 'Wallet',    icon: Wallet },
+];
 
 // ── Affiliation Requests Section ──────────────────────────────────────────────
 function AffiliationRequestsSection() {
@@ -783,18 +793,6 @@ function AffiliationRequestsSection() {
     </div>
   );
 }
-
-const NAV_ITEMS = [
-  { key: 'students',       label: 'Students',  icon: Users },
-  { key: 'staff',          label: 'Staff',     icon: UserPlus },
-  { key: 'classes',        label: 'Classes',   icon: GraduationCap },
-  { key: 'portal',         label: 'Portal',    icon: BookOpen },
-  { key: 'requests',       label: 'Requests',  icon: UserCheck },
-  { key: 'edits',          label: 'Edits',     icon: FileText },
-  { key: 'sessions',       label: 'Sessions',  icon: Calendar },
-  { key: 'school-profile', label: 'Profile',   icon: User },
-  { key: 'wallet',         label: 'Wallet',    icon: Wallet },
-];
 
 // ── Main Partner Module ───────────────────────────────────────────────────────
 export default function PartnerModule({ user, onLogout }) {
