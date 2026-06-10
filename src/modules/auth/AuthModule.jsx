@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Eye, EyeOff, Mail, Lock, User, Phone, ArrowLeft, ShieldCheck, Loader2, Building2, GraduationCap } from 'lucide-react';
+import { Eye, EyeOff, Mail, Lock, User, Phone, ArrowLeft, ShieldCheck, Loader2, Building2, GraduationCap, CheckCircle } from 'lucide-react';
 import { api } from '../../services/api.js';
 
 // ── Password strength ──────────────────────────────────────────────────────────
@@ -159,19 +159,49 @@ const LoginView = ({ onLoginSuccess, onGoRegister, onGoForgot, onPartnerPending,
 
 // ── REGISTER ───────────────────────────────────────────────────────────────────
 const RegisterView = ({ onSuccess, onBack }) => {
-  const [step, setStep] = useState(1); // 1=account type, 2=details
-  const [accountType, setAccountType] = useState(''); // student | partner
+  const [step, setStep] = useState(1); // 1=account type, 2=details, 3=school lookup
+  const [accountType, setAccountType] = useState('');
   const [form, setForm] = useState({
     full_name: '', email: '', phone: '', password: '', confirmPw: '',
     birth_year: '', state: '',
-    primary_track: 'school', school_code: '', partner_type: '',
+    primary_track: 'school', school_code: '', class_id: '', partner_type: '',
     business_name: '', contact_email: '',
   });
   const [showPw, setShowPw] = useState(false);
   const [loading, setLoading] = useState(false);
   const [errors, setErrors] = useState({});
 
+  // School lookup state
+  const [schoolLookupCode, setSchoolLookupCode] = useState('');
+  const [schoolLookupLoading, setSchoolLookupLoading] = useState(false);
+  const [schoolInfo, setSchoolInfo] = useState(null); // { id, name, classes }
+  const [schoolError, setSchoolError] = useState('');
+
   const set = (k) => (e) => setForm((f) => ({ ...f, [k]: e.target.value }));
+
+  const lookupSchool = async () => {
+    if (!schoolLookupCode.trim()) return;
+    setSchoolLookupLoading(true);
+    setSchoolError('');
+    setSchoolInfo(null);
+    try {
+      const res = await fetch(
+        `${import.meta.env.VITE_API_URL}/auth/school/lookup?code=${schoolLookupCode.trim().toUpperCase()}`
+      );
+      if (!res.ok) {
+        const err = await res.json();
+        setSchoolError(err.detail || 'School not found');
+        return;
+      }
+      const data = await res.json();
+      setSchoolInfo(data);
+      setForm(f => ({ ...f, school_code: schoolLookupCode.trim().toUpperCase() }));
+    } catch {
+      setSchoolError('Could not connect. Try again.');
+    } finally {
+      setSchoolLookupLoading(false);
+    }
+  };
 
   const validateStep2 = () => {
     const errs = {};
@@ -202,6 +232,7 @@ const RegisterView = ({ onSuccess, onBack }) => {
           password: form.password,
           primary_track: form.primary_track,
           school_code: form.school_code.trim() || undefined,
+          class_id: form.class_id || undefined,
           birth_year: form.birth_year ? parseInt(form.birth_year) : undefined,
           state: form.state.trim() || undefined,
         });
@@ -293,7 +324,59 @@ const RegisterView = ({ onSuccess, onBack }) => {
           </div>
         )}
         {accountType === 'student' && (
-          <Field placeholder="School Code (optional)" value={form.school_code} onChange={set('school_code')} />
+          <div className="space-y-3">
+            <label className="reads-label">School Code (optional)</label>
+            <div className="flex gap-2">
+              <input
+                className="reads-input flex-1"
+                placeholder="Enter school code e.g. GRA001"
+                value={schoolLookupCode}
+                onChange={e => { setSchoolLookupCode(e.target.value.toUpperCase()); setSchoolInfo(null); setSchoolError(''); }}
+              />
+              <button
+                type="button"
+                onClick={lookupSchool}
+                disabled={schoolLookupLoading || !schoolLookupCode.trim()}
+                className="px-4 py-2 bg-reads-navy text-white text-sm font-bold rounded-xl disabled:opacity-50"
+              >
+                {schoolLookupLoading ? '...' : 'Find'}
+              </button>
+            </div>
+            {schoolError && <p className="text-red-500 text-xs">{schoolError}</p>}
+            {schoolInfo && (
+              <div className="bg-reads-green-bg border border-reads-green rounded-xl p-3 space-y-3">
+                <div className="flex items-center gap-2">
+                  <CheckCircle size={16} className="text-reads-green flex-shrink-0" />
+                  <div>
+                    <p className="font-bold text-reads-navy text-sm">{schoolInfo.name}</p>
+                    <p className="text-reads-muted text-xs">Code: {schoolInfo.school_code}</p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => { setSchoolInfo(null); setSchoolLookupCode(''); setForm(f => ({ ...f, school_code: '', class_id: '' })); }}
+                    className="ml-auto text-reads-muted text-xs underline"
+                  >
+                    Change
+                  </button>
+                </div>
+                {schoolInfo.classes?.length > 0 && (
+                  <div>
+                    <label className="reads-label">Select your class</label>
+                    <select
+                      className="reads-input"
+                      value={form.class_id}
+                      onChange={e => setForm(f => ({ ...f, class_id: e.target.value }))}
+                    >
+                      <option value="">-- Select class --</option>
+                      {schoolInfo.classes.map(c => (
+                        <option key={c.id} value={c.id}>{c.name}</option>
+                      ))}
+                    </select>
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
         )}
 
         {accountType === 'partner' && (

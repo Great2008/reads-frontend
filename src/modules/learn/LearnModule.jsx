@@ -5,6 +5,7 @@ import {
 } from 'lucide-react';
 import { api } from '../../services/api.js';
 import { LoadingOverlay, EmptyState, TokenBadge, Badge, ProgressBar, Toast } from '../../components/UI.jsx';
+import CoursesModule from './CoursesModule.jsx';
 
 // ─────────────────────────────────────────────
 // Quiz View
@@ -467,6 +468,7 @@ const LessonListItem = ({ lesson, onClick }) => (
 // Main Learn Module
 // ─────────────────────────────────────────────
 export default function LearnModule({ onUpdateWallet }) {
+  const [mainTab, setMainTab] = useState('lessons'); // lessons | courses
   const [view, setView] = useState('list'); // list | detail
   const [lessons, setLessons] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -516,6 +518,26 @@ export default function LearnModule({ onUpdateWallet }) {
   return (
     <div className="px-4 pt-4 pb-4 animate-fade-in">
       <h1 className="font-display font-black text-reads-navy text-2xl mb-4">Learn</h1>
+
+      {/* Main tab switcher */}
+      <div className="flex gap-2 mb-4 bg-reads-cream rounded-2xl p-1">
+        {[['lessons', 'Lessons'], ['courses', 'Courses']].map(([val, label]) => (
+          <button
+            key={val}
+            onClick={() => setMainTab(val)}
+            className={`flex-1 py-2 text-sm font-bold rounded-xl transition-all
+              ${mainTab === val ? 'bg-white text-reads-navy shadow-sm' : 'text-reads-muted'}`}
+          >
+            {label}
+          </button>
+        ))}
+      </div>
+
+      {/* Courses tab */}
+      {mainTab === 'courses' && <CoursesModule />}
+
+      {/* Lessons tab */}
+      {mainTab === 'lessons' && (<>
 
       {/* Search */}
       <div className="relative mb-4">
@@ -568,6 +590,7 @@ export default function LearnModule({ onUpdateWallet }) {
       )}
 
       {toast && <Toast message={toast.msg} type={toast.type} onClose={() => setToast(null)} />}
+      </>)}
     </div>
   );
 }
