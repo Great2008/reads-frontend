@@ -42,17 +42,34 @@ function Overview({ stats, onNavigate }) {
 // ── Students Section ──────────────────────────────────────────────────────────
 function StudentsSection() {
   const [students, setStudents] = useState([]);
-  const [loading, setLoading] = useState(true);
-  const [search, setSearch] = useState('');
+  const [loading, setLoading]   = useState(true);
+  const [search, setSearch]     = useState('');
+  const [acting, setActing]     = useState(null);
+  const [selected, setSelected] = useState(null);
+  const [toast, setToast]       = useState(null);
+  const showToast = (msg, type = 'success') => { setToast({ msg, type }); setTimeout(() => setToast(null), 3000); };
 
-  useEffect(() => {
+  const load = () => {
     api.partner.getStudents()
-      .then((d) => setStudents(d?.students || []))
+      .then(d => setStudents(d?.students || []))
       .catch(() => {})
       .finally(() => setLoading(false));
-  }, []);
+  };
+  useEffect(() => { load(); }, []);
 
-  const filtered = students.filter((s) =>
+  const handleDeaffiliate = async (s) => {
+    if (!confirm(`Remove ${s.full_name} from your school? They have 30 days to recover.`)) return;
+    setActing(s.id);
+    try {
+      await api.partner.deaffiliateStudent(s.id, { reason: 'Removed by school admin' });
+      showToast(`${s.full_name} removed`);
+      load();
+    } catch (e) {
+      showToast(e.message || 'Failed', 'error');
+    } finally { setActing(null); setSelected(null); }
+  };
+
+  const filtered = students.filter(s =>
     !search || s.full_name?.toLowerCase().includes(search.toLowerCase())
   );
 
@@ -62,24 +79,42 @@ function StudentsSection() {
     <div className="px-4 pt-2 pb-4 animate-fade-in">
       <SectionHeader title="Students" subtitle={`${students.length} enrolled`} />
       <input className="reads-input mb-4" placeholder="Search students…"
-        value={search} onChange={(e) => setSearch(e.target.value)} />
+        value={search} onChange={e => setSearch(e.target.value)} />
       {filtered.length === 0 ? (
         <EmptyState icon={Users} title="No students" description="Students who enroll with your school code appear here." />
       ) : (
         <div className="space-y-2">
-          {filtered.map((s) => (
-            <div key={s.id} className="flex items-center gap-3 reads-card px-4 py-3">
-              <img src={`https://api.dicebear.com/8.x/initials/svg?seed=${encodeURIComponent(s.full_name)}&backgroundColor=16a34a&fontColor=ffffff`}
-                alt={s.full_name} className="w-10 h-10 rounded-xl object-cover flex-shrink-0" />
-              <div className="flex-1 min-w-0">
-                <p className="font-bold text-reads-navy text-sm truncate">{s.full_name}</p>
-                <p className="text-reads-muted text-xs">{s.class_name} · {s.email}</p>
+          {filtered.map(s => (
+            <div key={s.id} className="reads-card px-4 py-3">
+              <div className="flex items-center gap-3">
+                <img src={`https://api.dicebear.com/8.x/initials/svg?seed=${encodeURIComponent(s.full_name)}&backgroundColor=16a34a&fontColor=ffffff`}
+                  alt={s.full_name} className="w-10 h-10 rounded-xl flex-shrink-0" />
+                <div className="flex-1 min-w-0">
+                  <p className="font-bold text-reads-navy text-sm truncate">{s.full_name}</p>
+                  <p className="text-reads-muted text-xs">{s.class_name || 'No class'} · {s.email}</p>
+                </div>
+                <div className="flex items-center gap-2">
+                  <Badge label={s.fee_status === 'paid' ? 'Paid' : 'Unpaid'} variant={s.fee_status === 'paid' ? 'green' : 'red'} />
+                  <button onClick={() => setSelected(selected?.id === s.id ? null : s)}
+                    className="p-1.5 rounded-lg hover:bg-reads-cream">
+                    <ChevronRight size={14} className={`text-reads-muted transition-transform ${selected?.id === s.id ? 'rotate-90' : ''}`} />
+                  </button>
+                </div>
               </div>
-              <Badge label={s.fee_status === 'paid' ? 'Paid' : 'Unpaid'} variant={s.fee_status === 'paid' ? 'green' : 'red'} />
+              {selected?.id === s.id && (
+                <div className="mt-3 pt-3 border-t border-reads-border">
+                  <button onClick={() => handleDeaffiliate(s)} disabled={acting === s.id}
+                    className="w-full py-2 text-xs font-bold text-red-500 border border-red-200 rounded-xl flex items-center justify-center gap-1">
+                    {acting === s.id ? <Loader2 size={12} className="animate-spin" /> : <XCircle size={12} />}
+                    Remove from School
+                  </button>
+                </div>
+              )}
             </div>
           ))}
         </div>
       )}
+      {toast && <Toast message={toast.msg} type={toast.type} onClose={() => setToast(null)} />}
     </div>
   );
 }
