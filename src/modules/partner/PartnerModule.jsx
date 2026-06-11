@@ -708,11 +708,114 @@ const NAV_ITEMS = [
   { key: 'classes',        label: 'Classes',   icon: GraduationCap },
   { key: 'portal',         label: 'Portal',    icon: BookOpen },
   { key: 'requests',       label: 'Requests',  icon: UserCheck },
+  { key: 'course-review',  label: 'Courses',   icon: BookOpen },
   { key: 'edits',          label: 'Edits',     icon: FileText },
   { key: 'sessions',       label: 'Sessions',  icon: Calendar },
   { key: 'school-profile', label: 'Profile',   icon: User },
   { key: 'wallet',         label: 'Wallet',    icon: Wallet },
 ];
+
+
+// ── Course Review Section (School Partner) ────────────────────────────────────
+function CourseReviewSection() {
+  const [courses, setCourses]   = useState([]);
+  const [loading, setLoading]   = useState(true);
+  const [acting, setActing]     = useState(null);
+  const [toast, setToast]       = useState(null);
+  const showToast = (msg, type = 'success') => { setToast({ msg, type }); setTimeout(() => setToast(null), 3000); };
+
+  const API_URL = (import.meta.env.VITE_API_URL || '') + '/api';
+  const token   = () => localStorage.getItem('access_token');
+
+  const load = async () => {
+    setLoading(true);
+    try {
+      const res = await fetch(`${API_URL}/courses?scope=school`, {
+        headers: { Authorization: `Bearer ${token()}` }
+      });
+      const data = await res.json();
+      // Filter courses in cooldown/pending review
+      const pending = (data.courses || []).filter(c =>
+        c.status === 'cooldown' || c.status === 'approved_pending_release'
+      );
+      setCourses(pending);
+    } catch (e) {
+      showToast('Failed to load courses', 'error');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => { load(); }, []);
+
+  const approve = async (courseId) => {
+    setActing(courseId);
+    try {
+      const res = await fetch(`${API_URL}/courses/${courseId}/approve`, {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${token()}`, 'Content-Type': 'application/json' }
+      });
+      if (!res.ok) throw new Error((await res.json()).detail || 'Failed');
+      showToast('Course approved — will go live when cooldown ends.');
+      load();
+    } catch (e) {
+      showToast(e.message, 'error');
+    } finally {
+      setActing(null);
+    }
+  };
+
+  if (loading) return <LoadingOverlay />;
+
+  return (
+    <div className="px-4 pt-2 pb-4 space-y-4 animate-fade-in">
+      <div>
+        <p className="font-black text-reads-navy text-lg">Course Reviews</p>
+        <p className="text-reads-muted text-xs">Courses pending your review before going live</p>
+      </div>
+
+      {courses.length === 0 ? (
+        <div className="reads-card p-6 text-center">
+          <CheckCircle size={32} className="text-reads-green mx-auto mb-2" />
+          <p className="font-bold text-reads-navy text-sm">All clear!</p>
+          <p className="text-reads-muted text-xs mt-1">No courses pending review right now.</p>
+        </div>
+      ) : (
+        <div className="space-y-3">
+          {courses.map(c => (
+            <div key={c.id} className="reads-card p-4 space-y-3">
+              <div>
+                <p className="font-black text-reads-navy text-sm">{c.title}</p>
+                <p className="text-reads-muted text-xs">{c.subject}</p>
+              </div>
+
+              <div className="bg-amber-50 border border-amber-200 rounded-xl p-3 text-xs text-amber-700">
+                ⏳ This course will auto-publish when the 3-hour review window ends.
+                Approve it now or stay quiet — it will go live either way.
+                If you need changes, contact the admin.
+              </div>
+
+              <div className="flex gap-2">
+                <button
+                  onClick={() => approve(c.id)}
+                  disabled={acting === c.id || c.status === 'approved_pending_release'}
+                  className={`flex-1 py-2.5 text-sm font-bold rounded-xl transition-all
+                    ${c.status === 'approved_pending_release'
+                      ? 'bg-green-100 text-reads-green cursor-default'
+                      : 'bg-reads-navy text-white'}`}
+                >
+                  {acting === c.id ? <Loader2 size={14} className="animate-spin mx-auto" /> :
+                   c.status === 'approved_pending_release' ? '✓ Approved' : 'Approve'}
+                </button>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+      {toast && <Toast message={toast.msg} type={toast.type} onClose={() => setToast(null)} />}
+    </div>
+  );
+}
 
 // ── Affiliation Requests Section ──────────────────────────────────────────────
 function AffiliationRequestsSection() {
@@ -839,9 +942,10 @@ export default function PartnerModule({ user, onLogout }) {
             {section === 'students' && <StudentsSection />}
             {section === 'staff' && <StaffSection />}
             {section === 'classes' && <ClassesSection />}
-          {section === 'requests' && <AffiliationRequestsSection />}
-          {section === 'edits' && <EditRequestsSection />}
-          {section === 'sessions' && <SessionsSection classes={classes} />}
+          {section === 'requests'      && <AffiliationRequestsSection />}
+          {section === 'edits'         && <EditRequestsSection />}
+          {section === 'course-review' && <CourseReviewSection />}
+          {section === 'sessions'      && <SessionsSection classes={classes} />}
           {section === 'school-profile' && <SchoolProfileSection />}
             {section === 'wallet' && <PartnerWalletSection />}
           </main>

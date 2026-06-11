@@ -1975,10 +1975,436 @@ function NotificationsSection() {
 // ─────────────────────────────────────────────
 // Admin Nav
 // ─────────────────────────────────────────────
+
+// ─────────────────────────────────────────────
+// Courses Section
+// ─────────────────────────────────────────────
+function CoursesSection() {
+  const [view, setView]               = useState('list');   // list | create | detail | generate
+  const [courses, setCourses]         = useState([]);
+  const [loading, setLoading]         = useState(true);
+  const [selected, setSelected]       = useState(null);
+  const [schools, setSchools]         = useState([]);
+  const [uploads, setUploads]         = useState([]);
+  const [statusFilter, setStatusFilter] = useState('');
+  const [toast, setToast]             = useState(null);
+  const [saving, setSaving]           = useState(false);
+  const [uploading, setUploading]     = useState(false);
+
+  const showToast = (msg, type = 'success') => { setToast({ msg, type }); setTimeout(() => setToast(null), 3500); };
+
+  // ── Form state ────────────────────────────────────────────────────────────
+  const blankForm = {
+    title: '', description: '', subject: '', track: 'school',
+    scope: 'general', school_id: '', class_id: '',
+    start_date: '', term: '', quiz_pass_mark: 60,
+    week_pass_mark: 60, course_pass_mark: 60,
+    course_reward: 100, points_reward: 50,
+  };
+  const [form, setForm] = useState(blankForm);
+  const [weeks, setWeeks] = useState([{ week_number: 1, title: '', week_reward: 20 }]);
+
+  // ── Generate form ─────────────────────────────────────────────────────────
+  const blankGen = {
+    upload_id: '', title: '', subject: '', track: 'school',
+    scope: 'general', school_id: '', class_id: '',
+    weeks_count: 4, lessons_per_week: 2,
+    quiz_pass_mark: 60, week_pass_mark: 60, course_pass_mark: 60,
+    course_reward: 100, points_reward: 50, week_reward: 20,
+  };
+  const [genForm, setGenForm] = useState(blankGen);
+  const [generating, setGenerating] = useState(false);
+
+  const set  = k => e => setForm(f => ({ ...f, [k]: e.target.value }));
+  const setG = k => e => setGenForm(f => ({ ...f, [k]: e.target.value }));
+
+  const load = async () => {
+    setLoading(true);
+    try {
+      const [cRes, sRes] = await Promise.all([
+        api.courses.adminList(statusFilter),
+        api.admin.getSchools().catch(() => ({ schools: [] })),
+      ]);
+      setCourses(cRes?.courses || []);
+      setSchools(sRes?.schools || []);
+    } catch (e) { showToast(e.message, 'error'); }
+    finally { setLoading(false); }
+  };
+
+  useEffect(() => { load(); }, [statusFilter]);
+
+  // ── Upload curriculum ─────────────────────────────────────────────────────
+  const handleUpload = async (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setUploading(true);
+    try {
+      const res = await api.courses.uploadCurriculum(file);
+      setUploads(u => [...u, res]);
+      setGenForm(f => ({ ...f, upload_id: res.upload_id }));
+      showToast(`✅ "${file.name}" uploaded — ${res.text_length} chars extracted`);
+    } catch (err) {
+      showToast(err.message, 'error');
+    } finally {
+      setUploading(false);
+    }
+  };
+
+  // ── Create course ─────────────────────────────────────────────────────────
+  const handleCreate = async () => {
+    if (!form.title || !form.subject || !form.track) return showToast('Fill in title, subject and track', 'error');
+    setSaving(true);
+    try {
+      await api.courses.create({
+        ...form,
+        school_id: form.school_id || undefined,
+        class_id:  form.class_id  || undefined,
+        start_date: form.start_date || undefined,
+        term: form.term ? parseInt(form.term) : undefined,
+        quiz_pass_mark: parseInt(form.quiz_pass_mark),
+        week_pass_mark: parseInt(form.week_pass_mark),
+        course_pass_mark: parseInt(form.course_pass_mark),
+        course_reward: parseInt(form.course_reward),
+        points_reward: parseInt(form.points_reward),
+        weeks: weeks.map((w, i) => ({ ...w, week_number: i + 1, week_reward: parseInt(w.week_reward) || 0 })),
+      });
+      showToast('Course created — 3hr cooldown started');
+      setForm(blankForm);
+      setWeeks([{ week_number: 1, title: '', week_reward: 20 }]);
+      setView('list');
+      load();
+    } catch (e) { showToast(e.message, 'error'); }
+    finally { setSaving(false); }
+  };
+
+  // ── Generate course from AI ────────────────────────────────────────────────
+  const handleGenerate = async () => {
+    if (!genForm.upload_id) return showToast('Upload a curriculum first', 'error');
+    if (!genForm.title || !genForm.subject) return showToast('Fill in title and subject', 'error');
+    setGenerating(true);
+    try {
+      const res = await api.courses.generate({
+        ...genForm,
+        school_id: genForm.school_id || undefined,
+        class_id:  genForm.class_id  || undefined,
+        weeks_count: parseInt(genForm.weeks_count),
+        lessons_per_week: parseInt(genForm.lessons_per_week),
+        quiz_pass_mark: parseInt(genForm.quiz_pass_mark),
+        week_pass_mark: parseInt(genForm.week_pass_mark),
+        course_pass_mark: parseInt(genForm.course_pass_mark),
+        course_reward: parseInt(genForm.course_reward),
+        points_reward: parseInt(genForm.points_reward),
+        week_reward: parseInt(genForm.week_reward),
+      });
+      showToast(`✅ ${res.weeks_created} weeks generated! Cooldown started.`);
+      setGenForm(blankGen);
+      setView('list');
+      load();
+    } catch (e) { showToast(e.message, 'error'); }
+    finally { setGenerating(false); }
+  };
+
+  // ── Publish course ────────────────────────────────────────────────────────
+  const handlePublish = async (id) => {
+    try {
+      await api.courses.publish(id);
+      showToast('Course published!');
+      load();
+    } catch (e) { showToast(e.message, 'error'); }
+  };
+
+  // ── Delete course ─────────────────────────────────────────────────────────
+  const handleDelete = async (id) => {
+    if (!window.confirm('Delete this course? This cannot be undone.')) return;
+    try {
+      await api.courses.remove(id);
+      showToast('Course deleted');
+      load();
+    } catch (e) { showToast(e.message, 'error'); }
+  };
+
+  const STATUS_COLORS = {
+    draft: 'gray', cooldown: 'amber', approved_pending_release: 'blue',
+    published: 'green', archived: 'red',
+  };
+
+  // ── List View ─────────────────────────────────────────────────────────────
+  if (view === 'list') return (
+    <div className="px-4 pt-2 pb-4 animate-fade-in space-y-4">
+      <div className="flex items-center justify-between">
+        <SectionHeader title="Courses" subtitle={`${courses.length} total`} />
+        <div className="flex gap-2">
+          <button onClick={() => setView('generate')}
+            className="flex items-center gap-1 px-3 py-2 bg-reads-teal text-white text-xs font-bold rounded-xl">
+            <Sparkles size={13} /> AI Generate
+          </button>
+          <button onClick={() => setView('create')}
+            className="flex items-center gap-1 px-3 py-2 bg-reads-navy text-white text-xs font-bold rounded-xl">
+            <Plus size={13} /> New Course
+          </button>
+        </div>
+      </div>
+
+      {/* Status filter */}
+      <div className="flex gap-2 overflow-x-auto pb-1">
+        {[['', 'All'], ['draft', 'Draft'], ['cooldown', 'Cooldown'], ['published', 'Live'], ['archived', 'Archived']].map(([val, label]) => (
+          <button key={val} onClick={() => setStatusFilter(val)}
+            className={`px-3 py-1.5 rounded-xl text-xs font-bold whitespace-nowrap flex-shrink-0 transition-all
+              ${statusFilter === val ? 'bg-reads-navy text-white' : 'bg-gray-100 text-reads-muted'}`}>
+            {label}
+          </button>
+        ))}
+      </div>
+
+      {loading ? <LoadingOverlay /> : courses.length === 0 ? (
+        <EmptyState icon={BookOpen} title="No courses yet" subtitle="Create one or generate from a curriculum" />
+      ) : (
+        <div className="space-y-2">
+          {courses.map(c => (
+            <div key={c.id} className="reads-card p-4 space-y-2">
+              <div className="flex items-start justify-between gap-2">
+                <div className="flex-1 min-w-0">
+                  <p className="font-black text-reads-navy text-sm truncate">{c.title}</p>
+                  <p className="text-reads-muted text-xs">{c.subject} · {c.scope}</p>
+                </div>
+                <Badge label={c.status} variant={STATUS_COLORS[c.status] || 'gray'} />
+              </div>
+              {c.status === 'cooldown' && c.cooldown_ends_at && (
+                <p className="text-amber-600 text-xs">
+                  ⏳ Releases: {new Date(c.cooldown_ends_at).toLocaleString()}
+                </p>
+              )}
+              <div className="flex gap-2 pt-1">
+                {c.status === 'cooldown' && (
+                  <button onClick={() => handlePublish(c.id)}
+                    className="flex-1 text-xs font-bold py-2 bg-reads-green text-white rounded-xl">
+                    Publish Now
+                  </button>
+                )}
+                {c.status === 'draft' && (
+                  <button onClick={() => handlePublish(c.id)}
+                    className="flex-1 text-xs font-bold py-2 bg-reads-navy text-white rounded-xl">
+                    Publish
+                  </button>
+                )}
+                <button onClick={() => handleDelete(c.id)}
+                  className="px-3 py-2 text-xs font-bold text-red-500 border border-red-200 rounded-xl">
+                  <Trash2 size={13} />
+                </button>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+      {toast && <Toast message={toast.msg} type={toast.type} onClose={() => setToast(null)} />}
+    </div>
+  );
+
+  // ── Create Course View ────────────────────────────────────────────────────
+  if (view === 'create') return (
+    <div className="px-4 pt-2 pb-4 animate-fade-in space-y-4">
+      <div className="flex items-center gap-3">
+        <button onClick={() => setView('list')} className="p-1.5 rounded-xl hover:bg-reads-cream">
+          <ArrowLeft size={18} className="text-reads-navy" />
+        </button>
+        <SectionHeader title="New Course" subtitle="Manual creation" />
+      </div>
+
+      <div className="space-y-3">
+        <input className="reads-input" placeholder="Course title *" value={form.title} onChange={set('title')} />
+        <textarea className="reads-input min-h-[80px]" placeholder="Description" value={form.description} onChange={set('description')} />
+        <div className="grid grid-cols-2 gap-3">
+          <input className="reads-input" placeholder="Subject *" value={form.subject} onChange={set('subject')} />
+          <select className="reads-input" value={form.track} onChange={set('track')}>
+            {['school','jamb','waec','neco','bece','ielts','sat'].map(t => (
+              <option key={t} value={t}>{t.toUpperCase()}</option>
+            ))}
+          </select>
+        </div>
+
+        <div>
+          <label className="reads-label">Scope</label>
+          <select className="reads-input" value={form.scope} onChange={set('scope')}>
+            <option value="general">General (all students)</option>
+            <option value="school">School-specific</option>
+            <option value="class">Class-specific</option>
+          </select>
+        </div>
+
+        {(form.scope === 'school' || form.scope === 'class') && (
+          <select className="reads-input" value={form.school_id} onChange={set('school_id')}>
+            <option value="">Select school</option>
+            {schools.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
+          </select>
+        )}
+
+        <div className="grid grid-cols-2 gap-3">
+          <div>
+            <label className="reads-label">Start Date</label>
+            <input className="reads-input" type="date" value={form.start_date} onChange={set('start_date')} />
+          </div>
+          <div>
+            <label className="reads-label">Term</label>
+            <select className="reads-input" value={form.term} onChange={set('term')}>
+              <option value="">Any</option>
+              <option value="1">Term 1</option>
+              <option value="2">Term 2</option>
+              <option value="3">Term 3</option>
+            </select>
+          </div>
+        </div>
+
+        <p className="font-bold text-reads-navy text-sm pt-2">Pass Marks</p>
+        <div className="grid grid-cols-3 gap-2">
+          {[['quiz_pass_mark','Per Quiz'],['week_pass_mark','Per Week'],['course_pass_mark','Course']].map(([k, label]) => (
+            <div key={k}>
+              <label className="reads-label">{label} %</label>
+              <input className="reads-input" type="number" min="0" max="100" value={form[k]} onChange={set(k)} />
+            </div>
+          ))}
+        </div>
+
+        <p className="font-bold text-reads-navy text-sm pt-2">Rewards</p>
+        <div className="grid grid-cols-2 gap-3">
+          <div>
+            <label className="reads-label">Course $READS</label>
+            <input className="reads-input" type="number" value={form.course_reward} onChange={set('course_reward')} />
+          </div>
+          <div>
+            <label className="reads-label">Points</label>
+            <input className="reads-input" type="number" value={form.points_reward} onChange={set('points_reward')} />
+          </div>
+        </div>
+
+        <p className="font-bold text-reads-navy text-sm pt-2">Weeks</p>
+        <div className="space-y-2">
+          {weeks.map((w, i) => (
+            <div key={i} className="flex gap-2 items-center">
+              <span className="text-reads-muted text-xs w-16 flex-shrink-0">Week {i + 1}</span>
+              <input className="reads-input flex-1" placeholder="Week title (optional)"
+                value={w.title} onChange={e => setWeeks(ws => ws.map((x, j) => j === i ? { ...x, title: e.target.value } : x))} />
+              <input className="reads-input w-20" type="number" placeholder="$READS"
+                value={w.week_reward} onChange={e => setWeeks(ws => ws.map((x, j) => j === i ? { ...x, week_reward: e.target.value } : x))} />
+              {weeks.length > 1 && (
+                <button onClick={() => setWeeks(ws => ws.filter((_, j) => j !== i))}
+                  className="text-red-400 p-1"><Trash2 size={14} /></button>
+              )}
+            </div>
+          ))}
+          <button onClick={() => setWeeks(ws => [...ws, { week_number: ws.length + 1, title: '', week_reward: 20 }])}
+            className="text-reads-teal text-xs font-bold flex items-center gap-1">
+            <Plus size={13} /> Add Week
+          </button>
+        </div>
+
+        <button onClick={handleCreate} disabled={saving}
+          className="w-full reads-btn-primary py-3 mt-2 flex items-center justify-center gap-2">
+          {saving ? <Loader2 size={18} className="animate-spin" /> : <Plus size={18} />}
+          {saving ? 'Creating...' : 'Create Course'}
+        </button>
+      </div>
+      {toast && <Toast message={toast.msg} type={toast.type} onClose={() => setToast(null)} />}
+    </div>
+  );
+
+  // ── AI Generate View ──────────────────────────────────────────────────────
+  if (view === 'generate') return (
+    <div className="px-4 pt-2 pb-4 animate-fade-in space-y-4">
+      <div className="flex items-center gap-3">
+        <button onClick={() => setView('list')} className="p-1.5 rounded-xl hover:bg-reads-cream">
+          <ArrowLeft size={18} className="text-reads-navy" />
+        </button>
+        <SectionHeader title="AI Course Generator" subtitle="Upload curriculum → AI builds the course" />
+      </div>
+
+      {/* Step 1: Upload */}
+      <div className="reads-card p-4 space-y-3">
+        <p className="font-bold text-reads-navy text-sm">Step 1 — Upload Curriculum</p>
+        <p className="text-reads-muted text-xs">Accepts PDF, Word (.docx), or plain text (.txt)</p>
+        <label className={`flex items-center justify-center gap-2 w-full py-3 border-2 border-dashed rounded-xl cursor-pointer transition-all
+          ${genForm.upload_id ? 'border-reads-green bg-green-50' : 'border-reads-border hover:border-reads-navy'}`}>
+          <input type="file" accept=".pdf,.docx,.txt" className="hidden" onChange={handleUpload} disabled={uploading} />
+          {uploading ? (
+            <><Loader2 size={16} className="animate-spin text-reads-navy" /><span className="text-sm text-reads-navy">Uploading...</span></>
+          ) : genForm.upload_id ? (
+            <><CheckCircle size={16} className="text-reads-green" /><span className="text-sm text-reads-green font-bold">Curriculum uploaded ✓</span></>
+          ) : (
+            <><FileText size={16} className="text-reads-muted" /><span className="text-sm text-reads-muted">Tap to upload curriculum</span></>
+          )}
+        </label>
+      </div>
+
+      {/* Step 2: Configure */}
+      <div className="reads-card p-4 space-y-3">
+        <p className="font-bold text-reads-navy text-sm">Step 2 — Configure Course</p>
+        <input className="reads-input" placeholder="Course title *" value={genForm.title} onChange={setG('title')} />
+        <div className="grid grid-cols-2 gap-3">
+          <input className="reads-input" placeholder="Subject *" value={genForm.subject} onChange={setG('subject')} />
+          <select className="reads-input" value={genForm.track} onChange={setG('track')}>
+            {['school','jamb','waec','neco','bece','ielts','sat'].map(t => (
+              <option key={t} value={t}>{t.toUpperCase()}</option>
+            ))}
+          </select>
+        </div>
+        <div className="grid grid-cols-2 gap-3">
+          <div>
+            <label className="reads-label">Number of Weeks</label>
+            <input className="reads-input" type="number" min="1" max="20" value={genForm.weeks_count} onChange={setG('weeks_count')} />
+          </div>
+          <div>
+            <label className="reads-label">Lessons per Week</label>
+            <input className="reads-input" type="number" min="1" max="7" value={genForm.lessons_per_week} onChange={setG('lessons_per_week')} />
+          </div>
+        </div>
+        <div>
+          <label className="reads-label">Scope</label>
+          <select className="reads-input" value={genForm.scope} onChange={setG('scope')}>
+            <option value="general">General</option>
+            <option value="school">School-specific</option>
+            <option value="class">Class-specific</option>
+          </select>
+        </div>
+        {(genForm.scope === 'school' || genForm.scope === 'class') && (
+          <select className="reads-input" value={genForm.school_id} onChange={setG('school_id')}>
+            <option value="">Select school</option>
+            {schools.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
+          </select>
+        )}
+        <div className="grid grid-cols-3 gap-2">
+          {[['quiz_pass_mark','Quiz %'],['week_pass_mark','Week %'],['course_pass_mark','Course %']].map(([k, label]) => (
+            <div key={k}>
+              <label className="reads-label">{label}</label>
+              <input className="reads-input" type="number" min="0" max="100" value={genForm[k]} onChange={setG(k)} />
+            </div>
+          ))}
+        </div>
+        <div className="grid grid-cols-3 gap-2">
+          {[['course_reward','Course $READS'],['week_reward','Week $READS'],['points_reward','Points']].map(([k, label]) => (
+            <div key={k}>
+              <label className="reads-label">{label}</label>
+              <input className="reads-input" type="number" value={genForm[k]} onChange={setG(k)} />
+            </div>
+          ))}
+        </div>
+      </div>
+
+      <button onClick={handleGenerate} disabled={generating || !genForm.upload_id}
+        className="w-full reads-btn-primary py-3 flex items-center justify-center gap-2 disabled:opacity-50">
+        {generating ? <Loader2 size={18} className="animate-spin" /> : <Sparkles size={18} />}
+        {generating ? 'Generating course... (this may take 30s)' : 'Generate Course with AI'}
+      </button>
+      {toast && <Toast message={toast.msg} type={toast.type} onClose={() => setToast(null)} />}
+    </div>
+  );
+
+  return null;
+}
+
 const ADMIN_NAV = [
   { key: 'dashboard',     label: 'Overview',     icon: BarChart2 },
   { key: 'users',         label: 'Users',        icon: Users },
   { key: 'lessons',       label: 'Lessons',      icon: BookOpen },
+  { key: 'courses',       label: 'Courses',      icon: GraduationCap },
   { key: 'applications',  label: 'Applications', icon: Building2 },
   { key: 'edit-requests', label: 'Requests',     icon: Edit2 },
   { key: 'tournament',   label: 'Challenge',    icon: Trophy },
@@ -2026,6 +2452,7 @@ export default function AdminModule({ currentUserId }) {
       {section === 'dashboard'     && <AdminStats onNavigate={setSection} />}
       {section === 'users'         && <UsersSection />}
       {section === 'lessons'       && <LessonsSection />}
+      {section === 'courses'       && <CoursesSection />}
       {section === 'applications'  && <ApplicationsSection />}
       {section === 'edit-requests' && <EditRequestsSection />}
       {section === 'notifications' && <NotificationsSection />}
