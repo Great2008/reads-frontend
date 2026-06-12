@@ -666,6 +666,7 @@ export const api = {
   partner,
   tutorPortal,
   tournament,
+  courses,
 };
 
 export const courses = {
