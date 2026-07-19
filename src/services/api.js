@@ -346,6 +346,12 @@ export const wallet = {
 
   // Submit the fully-signed tx CBOR
   submitClaimTx: (data) => post('/wallet/rewards/submit-claim-tx', data),
+
+  // Redeem Rewards catalog (airtime, data, discounts, premium) — TODO(backend):
+  // build /wallet/redeem-catalog (GET) returning { items: [{ id, label, cost, icon_key, category }] }
+  // and /wallet/redeem/{item_id} (POST) that debits balance + fulfills the reward.
+  getRedeemCatalog: () => get('/wallet/redeem-catalog'),
+  redeem: (itemId) => post(`/wallet/redeem/${itemId}`, {}),
 };
 
 // ── Marketplace ───────────────────────────────────────────────────────────────
