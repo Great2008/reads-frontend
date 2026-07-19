@@ -487,7 +487,7 @@ export default function App() {
         {view === 'settings' && <SettingsModule />}
 
         {view === 'school' && (
-          <SchoolModule tokenBalance={tokenBalance} onBalanceUpdate={setTokenBalance} />
+          <SchoolModule user={user} tokenBalance={tokenBalance} onBalanceUpdate={setTokenBalance} />
         )}
 
         {/* Phase 2+ — Coming Soon */}

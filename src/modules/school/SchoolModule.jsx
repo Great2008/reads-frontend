@@ -2,10 +2,83 @@ import { useState, useEffect } from 'react';
 import {
   School, Users, BookOpen, ClipboardList, ChevronRight,
   Search, UserPlus, Loader2, ArrowLeft, GraduationCap,
-  CheckCircle, XCircle, Upload, Download
+  CheckCircle, XCircle, Upload, Download, Users2, Percent,
+  Star, AlertCircle, Clock, Gift, ArrowRight,
 } from 'lucide-react';
 import { api } from '../../services/api.js';
-import { LoadingOverlay, EmptyState, Badge, Modal, Toast, SectionHeader } from '../../components/UI.jsx';
+import { LoadingOverlay, EmptyState, Badge, Modal, Toast, SectionHeader, ProgressBar, TokenBadge } from '../../components/UI.jsx';
+
+const AVATAR_FALLBACK = (name) =>
+  `https://api.dicebear.com/8.x/initials/svg?seed=${encodeURIComponent(name || 'U')}&backgroundColor=16a34a&fontColor=ffffff`;
+
+// ── Academic Snapshot tile ────────────────────────────────────────────────────
+const SnapshotTile = ({ icon: Icon, value, label, bg, color }) => (
+  <div className="reads-card p-3 text-center">
+    <div className={`w-8 h-8 rounded-lg ${bg} flex items-center justify-center mx-auto mb-2`}>
+      <Icon size={16} className={color} />
+    </div>
+    <p className="font-black text-reads-navy text-base leading-none">{value}</p>
+    <p className="text-reads-muted-light text-[10px] mt-1">{label}</p>
+  </div>
+);
+
+// ── Today's class row ──────────────────────────────────────────────────────────
+const ClassRow = ({ cls }) => (
+  <div className="flex items-center gap-3 py-3 border-b border-gray-50 last:border-0">
+    <div className="w-14 flex-shrink-0">
+      <p className="text-reads-navy font-bold text-xs">{cls.time}</p>
+    </div>
+    <div className="flex-1 min-w-0">
+      <p className="text-reads-navy font-semibold text-sm truncate">{cls.subject}</p>
+      <p className="text-reads-muted text-xs">{cls.venue}</p>
+    </div>
+    {cls.join_url ? (
+      <a href={cls.join_url} target="_blank" rel="noreferrer"
+        className="reads-btn-primary px-3 py-1.5 text-xs flex-shrink-0">Join</a>
+    ) : (
+      <span className="text-reads-muted-light text-xs flex-shrink-0">—</span>
+    )}
+  </div>
+);
+
+// ── Subject / course card with progress ────────────────────────────────────────
+const SubjectCard = ({ subject }) => (
+  <div className="reads-card p-4">
+    <div className="flex items-start gap-3 mb-3">
+      <div className="w-10 h-10 bg-reads-green-bg rounded-xl flex items-center justify-center flex-shrink-0">
+        <BookOpen size={18} className="text-reads-green" />
+      </div>
+      <div className="min-w-0">
+        <p className="text-reads-navy font-bold text-sm truncate">{subject.name}</p>
+        {subject.code && <p className="text-reads-muted text-xs">{subject.code}</p>}
+      </div>
+    </div>
+    <ProgressBar value={subject.progress_pct ?? 0} max={100} color="green" />
+    <div className="flex items-center justify-between mt-2">
+      {subject.next_topic && <p className="text-reads-muted-light text-[10px]">Next: {subject.next_topic}</p>}
+      <span className="text-reads-navy text-xs font-bold">{subject.progress_pct ?? 0}%</span>
+    </div>
+  </div>
+);
+
+// ── Assignment row ──────────────────────────────────────────────────────────────
+const AssignmentRow = ({ a }) => (
+  <div className="flex items-center gap-3 py-3 border-b border-gray-50 last:border-0">
+    <div className="w-10 h-10 bg-reads-gold/10 rounded-xl flex items-center justify-center flex-shrink-0">
+      <ClipboardList size={18} className="text-reads-gold-dark" />
+    </div>
+    <div className="flex-1 min-w-0">
+      <p className="text-reads-navy font-semibold text-sm truncate">{a.title}</p>
+      <p className="text-reads-muted text-xs">
+        {a.subject}{a.due_date ? ` · Due ${new Date(a.due_date).toLocaleDateString()}` : ''}
+      </p>
+    </div>
+    <Badge
+      label={a.status === 'submitted' ? 'Submitted' : 'Pending'}
+      variant={a.status === 'submitted' ? 'green' : 'gold'}
+    />
+  </div>
+);
 
 // ── Join School Flow ───────────────────────────────────────────────────────────
 function JoinSchoolFlow({ onJoined, onClose }) {
@@ -113,9 +186,14 @@ function JoinSchoolFlow({ onJoined, onClose }) {
 }
 
 // ── Student View — My School ───────────────────────────────────────────────────
-function MySchool({ tokenBalance, onBalanceUpdate }) {
+function MySchool({ user, tokenBalance, onBalanceUpdate }) {
   const [profile, setProfile] = useState(null); // { status, ...data }
   const [fees, setFees] = useState([]);
+  const [snapshot, setSnapshot] = useState(null);
+  const [timetable, setTimetable] = useState([]);
+  const [subjects, setSubjects] = useState([]);
+  const [assignments, setAssignments] = useState([]);
+  const [continueLesson, setContinueLesson] = useState(null);
   const [loading, setLoading] = useState(true);
   const [showJoin, setShowJoin] = useState(false);
   const [showRecover, setShowRecover] = useState(false);
@@ -134,8 +212,20 @@ function MySchool({ tokenBalance, onBalanceUpdate }) {
       const data = await api.school.getProfile();
       setProfile(data);
       if (data?.status === 'enrolled') {
-        const feesData = await api.students.getMyFees().catch(() => ({ fees: [] }));
-        setFees(feesData?.fees || []);
+        const [feesRes, snapRes, ttRes, subRes, asgRes, lessonRes] = await Promise.allSettled([
+          api.students.getMyFees(),
+          api.students.getAcademicSnapshot(),
+          api.students.getTimetable(),
+          api.students.getMySubjects(),
+          api.students.getAssignments(),
+          api.lessons.list({ limit: 1 }),
+        ]);
+        if (feesRes.status === 'fulfilled') setFees(feesRes.value?.fees || []);
+        if (snapRes.status === 'fulfilled') setSnapshot(snapRes.value || null);
+        if (ttRes.status === 'fulfilled') setTimetable(ttRes.value?.classes || []);
+        if (subRes.status === 'fulfilled') setSubjects(subRes.value?.subjects || []);
+        if (asgRes.status === 'fulfilled') setAssignments(asgRes.value?.assignments || []);
+        if (lessonRes.status === 'fulfilled') setContinueLesson((lessonRes.value?.lessons || [])[0] || null);
       }
     } catch (_) { setProfile({ status: 'none' }); }
     setLoading(false);
@@ -285,76 +375,167 @@ function MySchool({ tokenBalance, onBalanceUpdate }) {
   const unpaidFees = fees.filter(f => f.status !== 'acknowledged');
   const paidFees = fees.filter(f => f.status === 'acknowledged');
   const school = profile; // alias
+  const outstandingBalance = unpaidFees.reduce((s, f) => s + (f.amount || 0), 0);
 
   return (
-    <div className="px-4 pt-4 pb-8 animate-fade-in space-y-4">
-      {/* School card */}
-      <div className="reads-card p-5">
-        <div className="flex items-start gap-4">
-          <div className="w-14 h-14 bg-reads-navy rounded-2xl flex items-center justify-center flex-shrink-0">
-            <School size={28} className="text-reads-gold" />
+    <div className="px-4 pt-4 pb-8 animate-fade-in space-y-5">
+      {/* Profile header card */}
+      <div className="reads-card p-4">
+        <div className="flex items-center gap-3">
+          <img
+            src={user?.avatar_url || AVATAR_FALLBACK(user?.full_name)}
+            alt={user?.full_name}
+            className="w-14 h-14 rounded-2xl object-cover flex-shrink-0"
+          />
+          <div className="min-w-0">
+            <p className="font-black text-reads-navy text-base truncate">{user?.full_name || 'Student'}</p>
+            <p className="text-reads-muted text-xs">
+              {school.current_class || 'Level —'}{school.department ? ` · ${school.department}` : ''}
+            </p>
+            {school.matric_no && <p className="text-reads-muted-light text-xs font-mono">{school.matric_no}</p>}
           </div>
-          <div className="flex-1">
-            <h2 className="font-display font-black text-reads-navy text-lg leading-tight">{school.name}</h2>
-            {school.address && <p className="text-reads-muted text-sm">{school.address}</p>}
-            <div className="flex items-center gap-2 mt-2 flex-wrap">
-              <Badge label={school.school_code} variant="gray" />
-              <Badge label={school.status === 'active' ? 'Active' : 'Suspended'}
-                variant={school.status === 'active' ? 'green' : 'red'} />
-            </div>
-          </div>
+        </div>
+        <div className="flex items-center gap-2 mt-3 flex-wrap">
+          <Badge label={school.name} variant="navy" />
+          <Badge label="Verified Student" variant="green" />
         </div>
       </div>
 
-      {/* Class & Session info */}
-      <div className="grid grid-cols-2 gap-3">
-        <div className="reads-card p-4">
-          <GraduationCap size={18} className="text-reads-green mb-2" />
-          <p className="font-black text-reads-navy text-sm">{school.current_class || '—'}</p>
-          <p className="text-reads-muted text-xs">Your Class</p>
-        </div>
-        <div className="reads-card p-4">
-          <BookOpen size={18} className="text-reads-green mb-2" />
-          <p className="font-black text-reads-navy text-sm">{school.current_session || '—'}</p>
-          <p className="text-reads-muted text-xs">Current Session</p>
+      {/* Academic Snapshot */}
+      <div>
+        <p className="font-black text-reads-navy text-sm mb-2">Academic Snapshot</p>
+        <div className="grid grid-cols-4 gap-2">
+          <SnapshotTile icon={BookOpen} value={snapshot?.courses_registered ?? '—'} label="Courses" bg="bg-reads-green-bg" color="text-reads-green" />
+          <SnapshotTile icon={Percent} value={snapshot ? `${snapshot.attendance_pct ?? 0}%` : '—'} label="Attendance" bg="bg-reads-green-bg" color="text-reads-green" />
+          <SnapshotTile icon={Star} value={snapshot?.gpa ?? '—'} label="GPA" bg="bg-reads-gold/10" color="text-reads-gold-dark" />
+          <SnapshotTile icon={AlertCircle} value={snapshot?.assignments_due ?? '—'} label="Due Soon" bg="bg-reads-red-bg" color="text-reads-red" />
         </div>
       </div>
 
-      {/* Fees */}
-      {fees.length > 0 && (
+      {/* Today's Classes */}
+      <div>
+        <div className="flex items-center justify-between mb-2">
+          <p className="font-black text-reads-navy text-sm">Today's Classes</p>
+        </div>
+        {timetable.length === 0 ? (
+          <div className="reads-card p-4">
+            <p className="text-reads-muted text-xs text-center py-2">No classes scheduled for today yet.</p>
+          </div>
+        ) : (
+          <div className="reads-card px-4">
+            {timetable.map((cls) => <ClassRow key={cls.id} cls={cls} />)}
+          </div>
+        )}
+      </div>
+
+      {/* Continue Learning */}
+      {continueLesson && (
         <div>
-          <p className="font-black text-reads-navy text-xs uppercase tracking-wide mb-2">School Fees</p>
-          <div className="space-y-2">
-            {unpaidFees.map(f => (
-              <div key={f.id} className="reads-card px-4 py-3 border-l-4 border-amber-400">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <p className="font-bold text-reads-navy text-sm">Term {f.term} — {f.class_name}</p>
-                    <p className="text-reads-muted text-xs">{f.amount} $READS{f.due_date ? ` · Due ${new Date(f.due_date).toLocaleDateString()}` : ''}</p>
-                  </div>
-                  <button
-                    onClick={() => handlePay(f.id)}
-                    disabled={payingId === f.id}
-                    className="reads-btn-primary px-3 py-1.5 text-xs flex items-center gap-1">
-                    {payingId === f.id ? <Loader2 size={12} className="animate-spin" /> : null}
-                    Pay
-                  </button>
-                </div>
+          <p className="font-black text-reads-navy text-sm mb-2">Continue Learning</p>
+          <div className="reads-card p-4 flex items-center gap-3">
+            <div className="w-12 h-12 bg-reads-green-bg rounded-xl flex items-center justify-center flex-shrink-0">
+              <BookOpen size={20} className="text-reads-green" />
+            </div>
+            <div className="flex-1 min-w-0">
+              <p className="text-reads-navy font-bold text-sm truncate">{continueLesson.title}</p>
+              <p className="text-reads-muted text-xs">{continueLesson.subject}</p>
+            </div>
+            <TokenBadge amount={continueLesson.token_reward} />
+          </div>
+        </div>
+      )}
+
+      {/* My Subjects */}
+      {subjects.length > 0 && (
+        <div>
+          <p className="font-black text-reads-navy text-sm mb-2">My Subjects</p>
+          <div className="grid grid-cols-1 gap-3">
+            {subjects.map((s) => <SubjectCard key={s.id} subject={s} />)}
+          </div>
+        </div>
+      )}
+
+      {/* Assignments */}
+      <div>
+        <p className="font-black text-reads-navy text-sm mb-2">Assignments</p>
+        {assignments.length === 0 ? (
+          <div className="reads-card p-4">
+            <p className="text-reads-muted text-xs text-center py-2">No assignments due right now.</p>
+          </div>
+        ) : (
+          <div className="reads-card px-4">
+            {assignments.map((a) => <AssignmentRow key={a.id} a={a} />)}
+          </div>
+        )}
+      </div>
+
+      {/* Fees & Payments */}
+      <div>
+        <p className="font-black text-reads-navy text-sm mb-2">Fees & Payments</p>
+        {fees.length === 0 ? (
+          <div className="reads-card p-4">
+            <p className="text-reads-muted text-xs text-center py-2">No fees on record.</p>
+          </div>
+        ) : (
+          <>
+            <div className="reads-card p-4 mb-2 flex items-center justify-between">
+              <div>
+                <p className="text-reads-muted text-xs">Outstanding Balance</p>
+                <p className="font-black text-reads-red text-lg">{outstandingBalance.toLocaleString()} $READS</p>
               </div>
-            ))}
-            {paidFees.map(f => (
-              <div key={f.id} className="reads-card px-4 py-3 border-l-4 border-reads-green opacity-70">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <p className="font-bold text-reads-navy text-sm">Term {f.term} — {f.class_name}</p>
-                    <p className="text-reads-muted text-xs">{f.amount} $READS</p>
-                  </div>
-                  <div className="flex items-center gap-1 text-reads-green text-xs font-bold">
-                    <CheckCircle size={14} /> Paid
+              <div className="text-right">
+                <p className="text-reads-muted text-xs">Wallet Balance</p>
+                <p className="font-bold text-reads-navy text-sm">{(tokenBalance || 0).toLocaleString()} $READS</p>
+              </div>
+            </div>
+            <div className="space-y-2">
+              {unpaidFees.map(f => (
+                <div key={f.id} className="reads-card px-4 py-3 border-l-4 border-amber-400">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <p className="font-bold text-reads-navy text-sm">Term {f.term} — {f.class_name}</p>
+                      <p className="text-reads-muted text-xs">{f.amount} $READS{f.due_date ? ` · Due ${new Date(f.due_date).toLocaleDateString()}` : ''}</p>
+                    </div>
+                    <button
+                      onClick={() => handlePay(f.id)}
+                      disabled={payingId === f.id}
+                      className="reads-btn-primary px-3 py-1.5 text-xs flex items-center gap-1">
+                      {payingId === f.id ? <Loader2 size={12} className="animate-spin" /> : null}
+                      Pay
+                    </button>
                   </div>
                 </div>
-              </div>
-            ))}
+              ))}
+              {paidFees.map(f => (
+                <div key={f.id} className="reads-card px-4 py-3 border-l-4 border-reads-green opacity-70">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <p className="font-bold text-reads-navy text-sm">Term {f.term} — {f.class_name}</p>
+                      <p className="text-reads-muted text-xs">{f.amount} $READS</p>
+                    </div>
+                    <div className="flex items-center gap-1 text-reads-green text-xs font-bold">
+                      <CheckCircle size={14} /> Paid
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </>
+        )}
+      </div>
+
+      {/* Invite & Earn */}
+      {user?.referral_code && (
+        <div className="relative bg-reads-navy rounded-2xl p-4 overflow-hidden">
+          <div className="absolute top-0 right-0 w-24 h-24 bg-reads-green/10 rounded-full -translate-y-8 translate-x-8" />
+          <div className="relative z-10">
+            <p className="font-black text-white text-sm mb-1">Invite & Earn</p>
+            <p className="text-white/70 text-xs mb-3">Invite your classmates and earn 500 $READS each.</p>
+            <button
+              onClick={() => { navigator.clipboard.writeText(user.referral_code); showToast('Referral code copied!'); }}
+              className="bg-reads-green text-white text-sm font-bold rounded-xl px-4 py-2 active:scale-95 transition-transform">
+              Copy Code — {user.referral_code}
+            </button>
           </div>
         </div>
       )}
@@ -367,8 +548,7 @@ function MySchool({ tokenBalance, onBalanceUpdate }) {
             try {
               await api.students.unenroll();
               showToast('Left school successfully.');
-              setSchool(null);
-              setFees([]);
+              load();
             } catch (err) { showToast(err.message || 'Failed to leave school', 'error'); }
           }}
           className="text-reads-red text-sm font-semibold py-1">
@@ -381,14 +561,14 @@ function MySchool({ tokenBalance, onBalanceUpdate }) {
   );
 }
 
-export default function SchoolModule({ tokenBalance, onBalanceUpdate }) {
+export default function SchoolModule({ user, tokenBalance, onBalanceUpdate }) {
   return (
     <div className="animate-fade-in">
       <div className="px-4 pt-4">
         <h1 className="font-display font-black text-reads-navy text-2xl mb-1">My School</h1>
-        <p className="text-reads-muted text-sm mb-4">Your school enrollment and details</p>
+        <p className="text-reads-muted text-sm mb-4">Your campus. Your community.</p>
       </div>
-      <MySchool tokenBalance={tokenBalance} onBalanceUpdate={onBalanceUpdate} />
+      <MySchool user={user} tokenBalance={tokenBalance} onBalanceUpdate={onBalanceUpdate} />
     </div>
   );
 }
