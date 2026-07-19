@@ -171,6 +171,24 @@ export const students = {
   },
   getMyFees: () => get('/students/fees'),
   payFee: (fee_id) => post(`/students/fees/${fee_id}/pay`, {}),
+
+  // "My School" student dashboard — TODO(backend): none of these exist yet.
+  // Front-end calls them defensively (catches + falls back to empty state),
+  // so the UI is ready to light up the moment each endpoint ships.
+  getAcademicSnapshot: () => get('/students/academic-snapshot'),
+  // Expected shape: { courses_registered, attendance_pct, gpa, assignments_due }
+  getTimetable: (params = {}) => {
+    const q = new URLSearchParams(params).toString();
+    return get(`/students/timetable${q ? '?' + q : ''}`);
+  },
+  // Expected shape: { classes: [{ id, time, subject, venue, lecturer, join_url }] }
+  getMySubjects: () => get('/students/subjects'),
+  // Expected shape: { subjects: [{ id, name, code, progress_pct, next_topic, lecturer }] }
+  getAssignments: (params = {}) => {
+    const q = new URLSearchParams(params).toString();
+    return get(`/students/assignments${q ? '?' + q : ''}`);
+  },
+  // Expected shape: { assignments: [{ id, title, subject, due_date, status }] }
 };
 
 // ── Notifications ─────────────────────────────────────────────────────────────
