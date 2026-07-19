@@ -403,6 +403,10 @@ export const marketplace = {
   myPurchases: () => get('/marketplace/my/purchases'),
   myListings: () => get('/marketplace/my/listings'),
   downloadUrl: (item_id) => `${API_URL}/marketplace/${item_id}/download`,
+
+  // TODO(backend): wishlist/save-for-later — not built yet. Front-end toggles
+  // optimistically in local state regardless of call outcome.
+  toggleWishlist: (item_id) => post(`/marketplace/${item_id}/wishlist`, {}),
 };
 
 // ── AI Tutor ──────────────────────────────────────────────────────────────────
