@@ -2,13 +2,19 @@ import { useState, useEffect, useRef } from 'react';
 import {
   ShoppingBag, Search, BookOpen, FileText, Loader2, Plus,
   Download, Package, Tag, Trash2, CheckCircle, Clock, FileUp,
-  ChevronRight, BarChart2, X
+  ChevronRight, BarChart2, X, Heart, Star, LayoutGrid, HelpCircle,
+  ClipboardList, MoreHorizontal, Sparkles, ShieldCheck,
 } from 'lucide-react';
 import { api } from '../../services/api.js';
 import { LoadingOverlay, EmptyState, Badge, Modal, Toast, TokenBadge } from '../../components/UI.jsx';
 
 const CATEGORIES = ['All', 'Notes', 'Past Questions', 'Textbooks', 'Study Guides', 'Other'];
 const EXAM_TYPES = ['JAMB', 'WAEC', 'NECO', 'BECE', 'IELTS', 'SAT'];
+
+const CATEGORY_ICONS = {
+  All: LayoutGrid, Notes: FileText, 'Past Questions': HelpCircle,
+  Textbooks: BookOpen, 'Study Guides': ClipboardList, Other: MoreHorizontal,
+};
 
 const STATUS_STYLE = {
   active:   { bg: 'bg-green-100',  text: 'text-green-700',  label: 'Active'   },
@@ -25,7 +31,93 @@ function fmt(iso) {
   return new Date(iso).toLocaleDateString('en-NG', { day: 'numeric', month: 'short', year: 'numeric' });
 }
 
-// ── Browse Item Card ──────────────────────────────────────────────────────────
+// ── Category icon chip ────────────────────────────────────────────────────────
+function CategoryChip({ cat, active, onClick }) {
+  const Icon = CATEGORY_ICONS[cat] || MoreHorizontal;
+  return (
+    <button onClick={onClick}
+      className={`flex-shrink-0 flex flex-col items-center gap-1.5 w-16 transition-transform active:scale-95`}>
+      <div className={`w-11 h-11 rounded-2xl flex items-center justify-center ${
+        active ? 'bg-reads-green text-white' : 'bg-gray-100 text-reads-muted'
+      }`}>
+        <Icon size={18} />
+      </div>
+      <span className={`text-[10px] font-semibold text-center leading-tight ${active ? 'text-reads-green' : 'text-reads-muted'}`}>
+        {cat === 'Past Questions' ? 'Past Qs' : cat}
+      </span>
+    </button>
+  );
+}
+
+// ── Featured Resource banner ────────────────────────────────────────────────────
+function FeaturedResource({ item, onView }) {
+  if (!item) return null;
+  const Icon = catIcon(item.category);
+  return (
+    <div className="relative bg-reads-green-bg rounded-2xl p-4 mb-4 overflow-hidden">
+      <div className="absolute -top-6 -right-6 w-28 h-28 bg-reads-green/10 rounded-full" />
+      <div className="relative z-10 flex items-center gap-4">
+        <div className="w-16 h-16 bg-reads-navy rounded-2xl flex items-center justify-center flex-shrink-0">
+          <Icon size={28} className="text-reads-gold" />
+        </div>
+        <div className="flex-1 min-w-0">
+          <p className="text-reads-green text-[10px] font-bold uppercase tracking-wide mb-0.5">Featured Resource</p>
+          <p className="font-black text-reads-navy text-sm leading-tight truncate">{item.title}</p>
+          <p className="text-reads-muted text-xs mt-0.5">By {item.seller_name}</p>
+          <div className="flex items-center gap-2 mt-1.5">
+            {item.rating != null && (
+              <span className="flex items-center gap-0.5 text-xs font-bold text-reads-navy">
+                <Star size={12} className="text-reads-gold fill-reads-gold" /> {item.rating}
+                {item.review_count != null && <span className="text-reads-muted font-normal">({item.review_count})</span>}
+              </span>
+            )}
+            <TokenBadge amount={item.price_tokens} />
+          </div>
+        </div>
+      </div>
+      <button onClick={() => onView(item)}
+        className="reads-btn-primary w-full mt-3 text-sm">
+        View Resource
+      </button>
+    </div>
+  );
+}
+
+// ── Browse Grid Card (wishlist heart + rating) ──────────────────────────────────
+function GridCard({ item, onBuy, wishlisted, onToggleWishlist }) {
+  const Icon = catIcon(item.category);
+  return (
+    <div className="flex-shrink-0 w-40 reads-card p-3">
+      <div className="relative w-full h-20 bg-reads-navy rounded-xl flex items-center justify-center mb-2">
+        <Icon size={26} className="text-reads-gold" />
+        <button onClick={() => onToggleWishlist(item.id)}
+          className="absolute top-1.5 right-1.5 w-6 h-6 rounded-full bg-white/90 flex items-center justify-center">
+          <Heart size={12} className={wishlisted ? 'text-reads-red fill-reads-red' : 'text-reads-muted'} />
+        </button>
+      </div>
+      <p className="font-bold text-reads-navy text-xs leading-tight line-clamp-2 mb-1">{item.title}</p>
+      <p className="text-reads-muted text-[10px] mb-1.5 truncate">By {item.seller_name}</p>
+      {item.rating != null && (
+        <div className="flex items-center gap-1 mb-1.5">
+          <Star size={11} className="text-reads-gold fill-reads-gold" />
+          <span className="text-reads-navy text-[10px] font-bold">{item.rating}</span>
+          {item.review_count != null && <span className="text-reads-muted-light text-[10px]">({item.review_count})</span>}
+        </div>
+      )}
+      <div className="flex items-center justify-between">
+        <TokenBadge amount={item.price_tokens} />
+        {item.already_bought ? (
+          <CheckCircle size={16} className="text-reads-green flex-shrink-0" />
+        ) : (
+          <button onClick={() => onBuy(item)}
+            className="text-reads-green text-[10px] font-bold flex-shrink-0">Buy</button>
+        )}
+      </div>
+    </div>
+  );
+}
+
+// ── Browse Item Card (list view, used inside category filter results) ──────────
 function ItemCard({ item, onBuy }) {
   const Icon = catIcon(item.category);
   return (
@@ -429,10 +521,20 @@ export default function MarketplaceModule({ tokenBalance, onUpdateBalance }) {
   const [category, setCategory] = useState('All');
   const [buyTarget, setBuyTarget] = useState(null);
   const [showList, setShowList]   = useState(false);
+  const [wishlist, setWishlist]   = useState(new Set());
   const [toast, setToast]         = useState(null);
 
   const showToast = (msg, type = 'success') => {
     setToast({ msg, type }); setTimeout(() => setToast(null), 3500);
+  };
+
+  const toggleWishlist = (itemId) => {
+    setWishlist((prev) => {
+      const next = new Set(prev);
+      next.has(itemId) ? next.delete(itemId) : next.add(itemId);
+      return next;
+    });
+    api.marketplace.toggleWishlist(itemId).catch(() => {}); // backend not live yet — local state still updates
   };
 
   const load = async () => {
@@ -469,6 +571,9 @@ export default function MarketplaceModule({ tokenBalance, onUpdateBalance }) {
     item.description?.toLowerCase().includes(search.toLowerCase())
   );
 
+  const featured = items.find((i) => i.featured) || items[0] || null;
+  const recommended = filtered.filter((i) => i.id !== featured?.id).slice(0, 8);
+
   const TABS = [
     { key: 'browse',    label: 'Browse',      icon: ShoppingBag },
     { key: 'purchases', label: 'My Purchases', icon: Package     },
@@ -487,7 +592,7 @@ export default function MarketplaceModule({ tokenBalance, onUpdateBalance }) {
           </button>
         )}
       </div>
-      <p className="text-reads-muted text-sm mb-4">Buy & sell study materials with $READS tokens</p>
+      <p className="text-reads-muted text-sm mb-4">Buy and sell quality learning resources.</p>
 
       {/* Tab switcher */}
       <div className="flex gap-1 bg-gray-100 p-1 rounded-2xl mb-4">
@@ -508,22 +613,20 @@ export default function MarketplaceModule({ tokenBalance, onUpdateBalance }) {
         <>
           <div className="relative mb-3">
             <Search size={18} className="absolute left-3 top-1/2 -translate-y-1/2 text-reads-muted-light" />
-            <input className="reads-input pl-10" placeholder="Search materials…"
+            <input className="reads-input pl-10" placeholder="Search resources…"
               value={search}
               onChange={(e) => setSearch(e.target.value)}
               onKeyDown={(e) => e.key === 'Enter' && load()}
             />
           </div>
-          <div className="flex gap-2 overflow-x-auto pb-2 mb-4 -mx-4 px-4" style={{ scrollbarWidth: 'none' }}>
+
+          {/* Category icon chips */}
+          <div className="flex gap-3 overflow-x-auto pb-1 mb-4 -mx-4 px-4" style={{ scrollbarWidth: 'none' }}>
             {CATEGORIES.map(cat => (
-              <button key={cat} onClick={() => setCategory(cat)}
-                className={`px-4 py-1.5 rounded-full text-sm font-semibold whitespace-nowrap flex-shrink-0 transition-all ${
-                  category === cat ? 'bg-reads-navy text-white' : 'bg-gray-100 text-reads-muted'
-                }`}>
-                {cat}
-              </button>
+              <CategoryChip key={cat} cat={cat} active={category === cat} onClick={() => setCategory(cat)} />
             ))}
           </div>
+
           {loading ? (
             <LoadingOverlay message="Loading marketplace…" />
           ) : filtered.length === 0 ? (
@@ -532,7 +635,27 @@ export default function MarketplaceModule({ tokenBalance, onUpdateBalance }) {
               action={<button onClick={() => setShowList(true)} className="reads-btn-primary px-6">List an Item</button>}
             />
           ) : (
-            filtered.map(item => <ItemCard key={item.id} item={item} onBuy={setBuyTarget} />)
+            <>
+              {/* Featured Resource */}
+              <FeaturedResource item={featured} onView={setBuyTarget} />
+
+              {/* Recommended for You */}
+              {recommended.length > 0 && (
+                <div className="mb-4">
+                  <p className="font-black text-reads-navy text-sm mb-2">Recommended for You</p>
+                  <div className="flex gap-3 overflow-x-auto pb-1 -mx-4 px-4" style={{ scrollbarWidth: 'none' }}>
+                    {recommended.map((item) => (
+                      <GridCard key={item.id} item={item} onBuy={setBuyTarget}
+                        wishlisted={wishlist.has(item.id)} onToggleWishlist={toggleWishlist} />
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* Full list */}
+              <p className="font-black text-reads-navy text-sm mb-2">All Resources</p>
+              {filtered.map(item => <ItemCard key={item.id} item={item} onBuy={setBuyTarget} />)}
+            </>
           )}
         </>
       )}
