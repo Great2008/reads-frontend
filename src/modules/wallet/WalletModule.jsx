@@ -3,6 +3,7 @@ import {
   Coins, ArrowUpRight, ArrowDownLeft, Send, RefreshCw,
   Copy, CheckCircle, Loader2, ExternalLink, Wallet,
   Link, LinkIcon, Unlink, ChevronDown, ChevronUp, AlertCircle,
+  Gift, Smartphone, Wifi, Tag, Star, Flame, Shield, TrendingUp, TrendingDown,
 } from 'lucide-react';
 import { api } from '../../services/api.js';
 import { LoadingOverlay, EmptyState, Modal, Toast } from '../../components/UI.jsx';
@@ -12,8 +13,19 @@ const TX_TYPES = {
   received: { label: 'Received', color: 'text-reads-green', bg: 'bg-reads-green-bg',  icon: ArrowDownLeft },
   sent:     { label: 'Sent',     color: 'text-reads-red',   bg: 'bg-reads-red-bg',    icon: ArrowUpRight  },
   spent:    { label: 'Spent',    color: 'text-reads-red',   bg: 'bg-reads-red-bg',    icon: ArrowUpRight  },
+  reward:   { label: 'Reward',   color: 'text-reads-red',   bg: 'bg-reads-red-bg',    icon: Gift           },
   fee:      { label: 'Fee',      color: 'text-reads-muted', bg: 'bg-gray-100',        icon: ArrowUpRight  },
 };
+
+// Fallback catalog shown until /wallet/redeem-catalog exists on the backend.
+// Once live, api.wallet.getRedeemCatalog() response replaces this automatically.
+const FALLBACK_REDEEM_CATALOG = [
+  { id: 'airtime-500', label: 'Airtime — ₦500', cost: 1000, icon_key: 'airtime' },
+  { id: 'discount-5',  label: '5% Discount Coupon', cost: 300, icon_key: 'discount' },
+  { id: 'data-1gb',    label: 'Data Bundle — 1GB', cost: 1200, icon_key: 'data' },
+  { id: 'premium-7d',  label: 'READS Premium (7 Days)', cost: 2000, icon_key: 'premium' },
+];
+const REDEEM_ICONS = { airtime: Smartphone, discount: Tag, data: Wifi, premium: Star };
 
 const SUPPORTED_WALLETS = ['eternl', 'nami', 'typhon', 'vespr', 'flint'];
 
@@ -559,6 +571,91 @@ const ClaimSection = ({ linkedAddress, showToast }) => {
 };
 
 
+// ── Redeem Rewards ────────────────────────────────────────────────────────────
+const RedeemSection = ({ balance, onRedeemed, showToast }) => {
+  const [catalog, setCatalog] = useState(FALLBACK_REDEEM_CATALOG);
+  const [redeeming, setRedeeming] = useState(null);
+
+  useEffect(() => {
+    api.wallet.getRedeemCatalog()
+      .then((d) => { if (d?.items?.length) setCatalog(d.items); })
+      .catch(() => {}); // backend not live yet — keep fallback catalog
+  }, []);
+
+  const handleRedeem = async (item) => {
+    if (balance < item.cost) return showToast('Not enough $READS for this reward.', 'error');
+    setRedeeming(item.id);
+    try {
+      await api.wallet.redeem(item.id);
+      showToast(`Redeemed: ${item.label}!`);
+      onRedeemed?.();
+    } catch (e) {
+      showToast(e.message || 'Redeem is coming soon — backend in progress.', 'info');
+    } finally { setRedeeming(null); }
+  };
+
+  return (
+    <div className="mb-5">
+      <div className="flex items-center justify-between mb-3">
+        <h2 className="font-black text-reads-navy text-base">Redeem Rewards</h2>
+      </div>
+      <div className="reads-card px-4 divide-y divide-gray-50">
+        {catalog.map((item) => {
+          const Icon = REDEEM_ICONS[item.icon_key] || Gift;
+          return (
+            <button key={item.id} onClick={() => handleRedeem(item)} disabled={redeeming === item.id}
+              className="flex items-center gap-3 w-full py-3.5 text-left active:scale-98 transition-transform">
+              <div className="w-10 h-10 rounded-xl bg-reads-gold/10 flex items-center justify-center flex-shrink-0">
+                <Icon size={18} className="text-reads-gold-dark" />
+              </div>
+              <div className="flex-1 min-w-0">
+                <p className="text-reads-navy font-semibold text-sm truncate">{item.label}</p>
+                <p className="text-reads-muted text-xs mt-0.5">{item.cost.toLocaleString()} $READS</p>
+              </div>
+              {redeeming === item.id
+                ? <Loader2 size={16} className="animate-spin text-reads-muted flex-shrink-0" />
+                : <ChevronDown size={16} className="-rotate-90 text-reads-muted-light flex-shrink-0" />}
+            </button>
+          );
+        })}
+      </div>
+    </div>
+  );
+};
+
+// ── Streak card ───────────────────────────────────────────────────────────────
+const StreakCard = ({ streak }) => (
+  <div className="reads-card p-4 mb-5">
+    <div className="flex items-center gap-2 mb-3">
+      <Flame size={18} className="text-amber-500" />
+      <p className="font-black text-reads-navy text-sm">{streak} {streak === 1 ? 'day' : 'days'} in a row</p>
+    </div>
+    <p className="text-reads-muted text-xs mb-3">Keep it up! Study daily to grow your streak.</p>
+    <div className="flex items-center justify-between">
+      {Array.from({ length: 7 }, (_, i) => i + 1).map((d) => (
+        <div key={d} className={`w-7 h-7 rounded-full flex items-center justify-center text-[10px] font-bold ${
+          d <= Math.min(streak, 7) ? 'bg-reads-green text-white' : 'bg-gray-100 text-reads-muted-light'
+        }`}>
+          {d}
+        </div>
+      ))}
+    </div>
+  </div>
+);
+
+// ── Security note ────────────────────────────────────────────────────────────
+const SecurityCard = () => (
+  <div className="reads-card p-4 mb-5 flex items-start gap-3">
+    <div className="w-10 h-10 rounded-xl bg-reads-green-bg flex items-center justify-center flex-shrink-0">
+      <Shield size={18} className="text-reads-green" />
+    </div>
+    <div>
+      <p className="font-bold text-reads-navy text-sm">Your Wallet is Secure</p>
+      <p className="text-reads-muted text-xs mt-0.5">Your transactions and data are protected with top-level security.</p>
+    </div>
+  </div>
+);
+
 // ── Main Wallet Module ────────────────────────────────────────────────────────
 export default function WalletModule({ balance: initialBalance, onUpdateBalance }) {
   const [balance, setBalance]           = useState(initialBalance ?? 0);
@@ -567,19 +664,32 @@ export default function WalletModule({ balance: initialBalance, onUpdateBalance 
   const [txFilter, setTxFilter]         = useState('all');
   const [showSend, setShowSend]         = useState(false);
   const [cardanoAddress, setCardano]    = useState('');
+  const [streak, setStreak]             = useState(0);
+  const [walletStats, setWalletStats]   = useState(null); // from api.wallet.getStats(), once backend supports it
   const [toast, setToast]               = useState(null);
 
   const showToast = useCallback((msg, type = 'success') => {
     setToast({ msg, type }); setTimeout(() => setToast(null), 3500);
   }, []);
 
+  const refreshWallet = useCallback(async () => {
+    const [bal, txData] = await Promise.allSettled([
+      api.wallet.getBalance(),
+      api.wallet.getTransactions({ limit: 50 }),
+    ]);
+    if (bal.status === 'fulfilled') { setBalance(bal.value); onUpdateBalance?.(bal.value); }
+    if (txData.status === 'fulfilled') setTransactions(txData.value?.transactions || []);
+  }, [onUpdateBalance]);
+
   useEffect(() => {
     const load = async () => {
       try {
-        const [bal, txData, me] = await Promise.allSettled([
+        const [bal, txData, me, pStats, wStats] = await Promise.allSettled([
           api.wallet.getBalance(),
           api.wallet.getTransactions({ limit: 50 }),
           api.auth.me(),
+          api.profile.getStats(),
+          api.wallet.getStats(),
         ]);
         if (bal.status === 'fulfilled') {
           setBalance(bal.value);
@@ -589,6 +699,8 @@ export default function WalletModule({ balance: initialBalance, onUpdateBalance 
         if (me.status === 'fulfilled' && me.value?.cardano_address) {
           setCardano(me.value.cardano_address);
         }
+        if (pStats.status === 'fulfilled') setStreak(pStats.value?.streak ?? 0);
+        if (wStats.status === 'fulfilled') setWalletStats(wStats.value); // backend not live yet in most envs — falls back below
       } catch (_) {}
       setLoading(false);
     };
@@ -598,26 +710,31 @@ export default function WalletModule({ balance: initialBalance, onUpdateBalance 
   const handleSent = async (amt) => {
     setShowSend(false);
     showToast(`Sent ${amt} $READS successfully!`);
-    const [newBal, txData] = await Promise.allSettled([
-      api.wallet.getBalance(),
-      api.wallet.getTransactions({ limit: 50 }),
-    ]);
-    if (newBal.status === 'fulfilled') { setBalance(newBal.value); onUpdateBalance?.(newBal.value); }
-    if (txData.status === 'fulfilled') setTransactions(txData.value?.transactions || []);
+    await refreshWallet();
   };
 
   const filtered = transactions.filter((tx) => {
-    if (txFilter === 'in') return tx.type === 'earned' || tx.type === 'received';
-    if (txFilter === 'out') return tx.type === 'sent' || tx.type === 'spent';
+    if (txFilter === 'earned') return tx.type === 'earned';
+    if (txFilter === 'spent') return tx.type === 'spent' || tx.type === 'reward';
+    if (txFilter === 'transfers') return tx.type === 'sent' || tx.type === 'received';
+    if (txFilter === 'rewards') return tx.type === 'reward';
     return true;
   });
 
-  const totalEarned = transactions
+  // This-month / lifetime figures — use backend wallet.getStats() once it exists,
+  // otherwise derive from the loaded transaction list as a reasonable approximation.
+  const now = new Date();
+  const isThisMonth = (d) => { const dt = new Date(d); return dt.getMonth() === now.getMonth() && dt.getFullYear() === now.getFullYear(); };
+  const thisMonthEarned = walletStats?.this_month_earned ?? transactions
+    .filter((t) => (t.type === 'earned' || t.type === 'received') && isThisMonth(t.created_at))
+    .reduce((s, t) => s + t.amount, 0);
+  const thisMonthSpent = walletStats?.this_month_spent ?? transactions
+    .filter((t) => (t.type === 'sent' || t.type === 'spent') && isThisMonth(t.created_at))
+    .reduce((s, t) => s + Math.abs(t.amount), 0);
+  const lifetimeEarned = walletStats?.lifetime_earned ?? transactions
     .filter((t) => t.type === 'earned' || t.type === 'received')
     .reduce((s, t) => s + t.amount, 0);
-  const totalSpent = transactions
-    .filter((t) => t.type === 'sent' || t.type === 'spent')
-    .reduce((s, t) => s + Math.abs(t.amount), 0);
+  const availableToRedeem = walletStats?.available_to_redeem ?? balance;
 
   return (
     <div className="px-4 pt-4 pb-6 animate-fade-in">
@@ -638,32 +755,52 @@ export default function WalletModule({ balance: initialBalance, onUpdateBalance 
               className="flex-1 bg-reads-gold text-reads-navy font-bold text-sm rounded-2xl py-3 flex items-center justify-center gap-1.5 active:scale-95 transition-transform">
               <Send size={16} /> Send
             </button>
-            <button className="flex-1 bg-white/10 text-white font-bold text-sm rounded-2xl py-3 flex items-center justify-center gap-1.5 active:scale-95 transition-transform">
+            <button onClick={() => showToast('Fiat conversion is coming soon.', 'info')}
+              className="flex-1 bg-white/10 text-white font-bold text-sm rounded-2xl py-3 flex items-center justify-center gap-1.5 active:scale-95 transition-transform">
               <RefreshCw size={16} /> Convert
             </button>
           </div>
         </div>
       </div>
 
-      {/* Stats */}
+      {/* Stats: This Month Earned / Spent / Lifetime Earned / Available to Redeem */}
       <div className="grid grid-cols-2 gap-3 mb-5">
         <div className="reads-card p-4">
           <div className="flex items-center gap-2 mb-1">
-            <ArrowDownLeft size={16} className="text-reads-green" />
-            <p className="text-reads-muted text-xs">Total Earned</p>
+            <TrendingUp size={16} className="text-reads-green" />
+            <p className="text-reads-muted text-xs">This Month Earned</p>
           </div>
-          <p className="font-black text-reads-navy text-lg">{totalEarned.toLocaleString()}</p>
+          <p className="font-black text-reads-navy text-lg">{thisMonthEarned.toLocaleString()}</p>
           <p className="text-reads-muted text-xs">$READS</p>
         </div>
         <div className="reads-card p-4">
           <div className="flex items-center gap-2 mb-1">
-            <ArrowUpRight size={16} className="text-reads-red" />
-            <p className="text-reads-muted text-xs">Total Spent</p>
+            <TrendingDown size={16} className="text-reads-red" />
+            <p className="text-reads-muted text-xs">This Month Spent</p>
           </div>
-          <p className="font-black text-reads-navy text-lg">{totalSpent.toLocaleString()}</p>
+          <p className="font-black text-reads-navy text-lg">{thisMonthSpent.toLocaleString()}</p>
+          <p className="text-reads-muted text-xs">$READS</p>
+        </div>
+        <div className="reads-card p-4">
+          <div className="flex items-center gap-2 mb-1">
+            <Star size={16} className="text-reads-gold-dark" />
+            <p className="text-reads-muted text-xs">Lifetime Earned</p>
+          </div>
+          <p className="font-black text-reads-navy text-lg">{lifetimeEarned.toLocaleString()}</p>
+          <p className="text-reads-muted text-xs">$READS</p>
+        </div>
+        <div className="reads-card p-4">
+          <div className="flex items-center gap-2 mb-1">
+            <Wallet size={16} className="text-reads-navy" />
+            <p className="text-reads-muted text-xs">Available to Redeem</p>
+          </div>
+          <p className="font-black text-reads-navy text-lg">{availableToRedeem.toLocaleString()}</p>
           <p className="text-reads-muted text-xs">$READS</p>
         </div>
       </div>
+
+      {/* Streak */}
+      <StreakCard streak={streak} />
 
       {/* Cardano wallet section */}
       <CardanoSection
@@ -679,20 +816,23 @@ export default function WalletModule({ balance: initialBalance, onUpdateBalance 
         showToast={showToast}
       />
 
+      {/* Redeem Rewards */}
+      <RedeemSection balance={balance} onRedeemed={refreshWallet} showToast={showToast} />
+
       {/* Transactions */}
       <div>
         <div className="flex items-center justify-between mb-3">
-          <h2 className="font-black text-reads-navy text-base">Transactions</h2>
-          <div className="flex gap-1.5">
-            {['all', 'in', 'out'].map((f) => (
-              <button key={f} onClick={() => setTxFilter(f)}
-                className={`px-3 py-1 rounded-full text-xs font-semibold transition-all ${
-                  txFilter === f ? 'bg-reads-green text-white' : 'bg-gray-100 text-reads-muted'
-                }`}>
-                {f.charAt(0).toUpperCase() + f.slice(1)}
-              </button>
-            ))}
-          </div>
+          <h2 className="font-black text-reads-navy text-base">Recent Transactions</h2>
+        </div>
+        <div className="flex gap-1.5 mb-3 overflow-x-auto pb-1" style={{ scrollbarWidth: 'none' }}>
+          {['all', 'earned', 'spent', 'transfers', 'rewards'].map((f) => (
+            <button key={f} onClick={() => setTxFilter(f)}
+              className={`px-3 py-1 rounded-full text-xs font-semibold whitespace-nowrap transition-all ${
+                txFilter === f ? 'bg-reads-green text-white' : 'bg-gray-100 text-reads-muted'
+              }`}>
+              {f.charAt(0).toUpperCase() + f.slice(1)}
+            </button>
+          ))}
         </div>
 
         {loading ? (
@@ -704,6 +844,11 @@ export default function WalletModule({ balance: initialBalance, onUpdateBalance 
             {filtered.map((tx) => <TxRow key={tx.id} tx={tx} />)}
           </div>
         )}
+      </div>
+
+      {/* Security note */}
+      <div className="mt-5">
+        <SecurityCard />
       </div>
 
       {showSend && (

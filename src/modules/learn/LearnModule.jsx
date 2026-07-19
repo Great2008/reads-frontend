@@ -1,11 +1,19 @@
 import { useState, useEffect, useRef } from 'react';
 import {
   BookOpen, ChevronRight, ChevronLeft, Search, Filter,
-  CheckCircle, XCircle, Loader2, Clock, Coins, Trophy, RotateCcw, ArrowLeft
+  CheckCircle, XCircle, Loader2, Clock, Coins, Trophy, RotateCcw, ArrowLeft,
+  Flame, Star, Sigma, FlaskConical, Leaf, Languages, Lightbulb, Target, Award,
 } from 'lucide-react';
 import { api } from '../../services/api.js';
 import { LoadingOverlay, EmptyState, TokenBadge, Badge, ProgressBar, Toast } from '../../components/UI.jsx';
 import CoursesModule from './CoursesModule.jsx';
+
+// Icon lookup for "Browse by Category" — falls back to a generic book icon
+// for subjects the platform adds later.
+const SUBJECT_ICONS = {
+  Mathematics: Sigma, Physics: Target, Chemistry: FlaskConical,
+  Biology: Leaf, English: Languages,
+};
 
 // ─────────────────────────────────────────────
 // Quiz View
@@ -465,6 +473,50 @@ const LessonListItem = ({ lesson, onClick }) => (
 );
 
 // ─────────────────────────────────────────────
+// Stats + category browser (mirrors the Learn mockup header)
+// ─────────────────────────────────────────────
+const StatTile = ({ icon: Icon, value, label, bg, color }) => (
+  <div className="reads-card p-3 text-center">
+    <div className={`w-8 h-8 rounded-lg ${bg} flex items-center justify-center mx-auto mb-2`}>
+      <Icon size={16} className={color} />
+    </div>
+    <p className="font-black text-reads-navy text-lg leading-none">{value}</p>
+    <p className="text-reads-muted text-xs mt-0.5">{label}</p>
+  </div>
+);
+
+const CategoryTile = ({ subject, count, active, onClick }) => {
+  const Icon = SUBJECT_ICONS[subject] || BookOpen;
+  return (
+    <button onClick={onClick}
+      className={`flex-shrink-0 w-24 flex flex-col items-center gap-2 p-3 reads-card active:scale-95 transition-transform ${
+        active ? 'ring-2 ring-reads-green' : ''
+      }`}>
+      <div className="w-10 h-10 bg-reads-green-bg rounded-xl flex items-center justify-center">
+        <Icon size={18} className="text-reads-green" />
+      </div>
+      <div className="text-center">
+        <p className="text-reads-navy font-bold text-xs leading-tight truncate w-20">{subject}</p>
+        <p className="text-reads-muted-light text-[10px]">{count} lessons</p>
+      </div>
+    </button>
+  );
+};
+
+const RecommendedCard = ({ rec, onClick }) => (
+  <button onClick={() => onClick(rec)}
+    className="flex-shrink-0 w-44 reads-card p-3 text-left active:scale-95 transition-transform">
+    <div className={`w-8 h-8 rounded-lg flex items-center justify-center mb-2 ${
+      rec.type === 'lesson' ? 'bg-reads-green-bg' : 'bg-purple-50'
+    }`}>
+      {rec.type === 'lesson' ? <Target size={16} className="text-reads-green" /> : <Lightbulb size={16} className="text-purple-600" />}
+    </div>
+    <p className="text-reads-navy font-semibold text-xs leading-snug line-clamp-2">{rec.title}</p>
+    {rec.subject && <p className="text-reads-muted text-xs mt-1">{rec.subject}</p>}
+  </button>
+);
+
+// ─────────────────────────────────────────────
 // Main Learn Module
 // ─────────────────────────────────────────────
 export default function LearnModule({ onUpdateWallet }) {
@@ -474,8 +526,11 @@ export default function LearnModule({ onUpdateWallet }) {
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
   const [filter, setFilter] = useState('all'); // all | completed | pending
+  const [categoryFilter, setCategoryFilter] = useState(null); // subject name or null
   const [activeLesson, setActiveLesson] = useState(null);
   const [toast, setToast] = useState(null);
+  const [stats, setStats] = useState({ lessons_completed: 0, streak: 0 });
+  const [recommendations, setRecommendations] = useState([]);
 
   const showToast = (msg, type = 'success') => {
     setToast({ msg, type });
@@ -485,17 +540,32 @@ export default function LearnModule({ onUpdateWallet }) {
   useEffect(() => {
     const load = async () => {
       try {
-        const data = await api.lessons.list();
-        setLessons(data?.lessons || []);
+        const [lessonRes, statsRes, recsRes] = await Promise.allSettled([
+          api.lessons.list(),
+          api.profile.getStats(),
+          api.aiTutor.getRecommendations(),
+        ]);
+        if (lessonRes.status === 'fulfilled') setLessons(lessonRes.value?.lessons || []);
+        if (statsRes.status === 'fulfilled') setStats(statsRes.value || stats);
+        if (recsRes.status === 'fulfilled') setRecommendations((recsRes.value?.recommendations || []).slice(0, 5));
       } catch (_) {}
       setLoading(false);
     };
     load();
   }, []);
 
+  // Subject → lesson count, for the "Browse by Category" row
+  const categories = lessons.reduce((acc, l) => {
+    if (!l.subject) return acc;
+    acc[l.subject] = (acc[l.subject] || 0) + 1;
+    return acc;
+  }, {});
+
   const filtered = lessons.filter((l) => {
     const matchSearch = l.title?.toLowerCase().includes(search.toLowerCase()) ||
       l.subject?.toLowerCase().includes(search.toLowerCase());
+    const matchCategory = !categoryFilter || l.subject === categoryFilter;
+    if (!matchCategory) return false;
     if (filter === 'completed') return matchSearch && l.status === 'completed';
     if (filter === 'pending') return matchSearch && l.status !== 'completed';
     return matchSearch;
@@ -538,6 +608,54 @@ export default function LearnModule({ onUpdateWallet }) {
 
       {/* Lessons tab */}
       {mainTab === 'lessons' && (<>
+
+      {/* Stats row */}
+      <div className="grid grid-cols-3 gap-3 mb-4">
+        <StatTile icon={BookOpen} value={stats.lessons_completed ?? 0} label="Lessons" bg="bg-reads-green-bg" color="text-reads-green" />
+        <StatTile icon={Flame} value={stats.streak ?? 0} label="Streak" bg="bg-amber-50" color="text-amber-600" />
+        <StatTile icon={Award} value={lessons.filter(l => l.status === 'completed').length} label="Completed" bg="bg-reads-gold/10" color="text-reads-gold-dark" />
+      </div>
+
+      {/* Browse by Category */}
+      {Object.keys(categories).length > 0 && (
+        <div className="mb-4">
+          <div className="flex items-center justify-between mb-2">
+            <h2 className="font-black text-reads-navy text-sm">Browse by Category</h2>
+            {categoryFilter && (
+              <button onClick={() => setCategoryFilter(null)} className="text-reads-teal text-xs font-semibold">
+                Clear
+              </button>
+            )}
+          </div>
+          <div className="flex gap-2 overflow-x-auto pb-1 -mx-4 px-4" style={{ scrollbarWidth: 'none' }}>
+            {Object.entries(categories).map(([subject, count]) => (
+              <CategoryTile
+                key={subject}
+                subject={subject}
+                count={count}
+                active={categoryFilter === subject}
+                onClick={() => setCategoryFilter(categoryFilter === subject ? null : subject)}
+              />
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* Recommended for You */}
+      {recommendations.length > 0 && (
+        <div className="mb-4">
+          <h2 className="font-black text-reads-navy text-sm mb-2">Recommended for You</h2>
+          <div className="flex gap-2 overflow-x-auto pb-1 -mx-4 px-4" style={{ scrollbarWidth: 'none' }}>
+            {recommendations.map((r) => (
+              <RecommendedCard key={r.id} rec={r}
+                onClick={(rec) => {
+                  const match = lessons.find((l) => l.id === rec.lesson_id || l.id === rec.id);
+                  if (match) { setActiveLesson(match); setView('detail'); }
+                }} />
+            ))}
+          </div>
+        </div>
+      )}
 
       {/* Search */}
       <div className="relative mb-4">

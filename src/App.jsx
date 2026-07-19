@@ -2,10 +2,12 @@ import { useState, useEffect, lazy, Suspense, Component } from 'react';
 import {
   Award, LayoutDashboard, BookOpen, Wallet, User, Grid,
   Bell, Shield, School, SettingsIcon,
-  GraduationCap, ShoppingBag, ClipboardList, Sparkles, Trophy
+  GraduationCap, ShoppingBag, ClipboardList, Sparkles, Trophy,
+  HelpCircle, MessageCircle, Users, Gift, ChevronRight as ChevronRightIcon,
 } from 'lucide-react';
 
 import { api } from './services/api.js';
+import { Toast } from './components/UI.jsx';
 
 // ── Modules ───────────────────────────────────────────────────────────────────
 import WelcomePage          from './modules/welcome/WelcomePage.jsx';
@@ -98,7 +100,7 @@ const ComingSoon = ({ label, onBack }) => (
 // ─────────────────────────────────────────────
 // "More" tile grid
 // ─────────────────────────────────────────────
-const MoreModule = ({ onNavigate }) => {
+const MoreModule = ({ onNavigate, user }) => {
   // Phase 1 live features
   const livetiles = [
     { label: 'My School',    icon: School,        view: 'school',       color: '#16A34A', bg: '#f0fdf4' },
@@ -114,6 +116,25 @@ const MoreModule = ({ onNavigate }) => {
     { label: 'AI Tutor',     icon: Sparkles,      view: 'ai-tutor',    color: '#7C3AED', bg: '#f5f3ff' },
     { label: 'Challenge',    icon: Trophy,        view: 'challenge',   color: '#FFD700', bg: '#1a2a4a' },
     { label: 'My Results',   icon: Award,         view: 'student-portal', color: '#0D1F3C', bg: '#f0fdf4' },
+  ];
+
+  const [toast, setToast] = useState(null);
+  const showToast = (msg, type = 'info') => { setToast({ msg, type }); setTimeout(() => setToast(null), 3000); };
+
+  const copyReferral = () => {
+    if (!user?.referral_code) return showToast('Referral code not available yet.');
+    navigator.clipboard.writeText(user.referral_code);
+    showToast('Referral code copied!', 'success');
+  };
+
+  // Quick Links — Help/Contact/What's New have no backend endpoints yet;
+  // Invite/Referral reuse the same referral_code already on the user object.
+  const quickLinks = [
+    { label: 'Help & Support', icon: HelpCircle, onClick: () => showToast("Help center coming soon — email support in the meantime.") },
+    { label: 'Contact Us',     icon: MessageCircle, onClick: () => showToast('Contact form coming soon.') },
+    { label: 'Invite Friends', icon: Users, onClick: copyReferral },
+    { label: 'Referral Program', icon: Gift, onClick: copyReferral },
+    { label: "What's New",     icon: Sparkles, onClick: () => showToast("You're on the latest version of READS.") },
   ];
 
   return (
@@ -134,7 +155,7 @@ const MoreModule = ({ onNavigate }) => {
       </div>
 
       {/* Coming Soon */}
-      <div className="mb-3">
+      <div className="mb-6">
         <div className="flex items-center gap-2 mb-3">
           <div className="h-px flex-1 bg-gray-100" />
           <span className="text-reads-muted text-xs font-bold uppercase tracking-wider px-2">Coming in Phase 2</span>
@@ -153,6 +174,36 @@ const MoreModule = ({ onNavigate }) => {
           ))}
         </div>
       </div>
+
+      {/* Earn More, Learn More — invite banner */}
+      <div className="relative bg-reads-navy rounded-2xl p-4 mb-6 overflow-hidden">
+        <div className="absolute top-0 right-0 w-24 h-24 bg-reads-green/10 rounded-full -translate-y-8 translate-x-8" />
+        <div className="relative z-10">
+          <p className="font-black text-white text-sm mb-1">Earn More, Learn More!</p>
+          <p className="text-white/70 text-xs mb-3">Invite friends and earn points together.</p>
+          <button onClick={copyReferral}
+            className="bg-reads-green text-white text-sm font-bold rounded-xl px-4 py-2 active:scale-95 transition-transform">
+            Invite Now
+          </button>
+        </div>
+      </div>
+
+      {/* Quick Links */}
+      <div className="reads-card px-4 mb-6">
+        <p className="text-reads-muted text-xs font-semibold uppercase tracking-wide py-3">Quick Links</p>
+        <div className="divide-y divide-gray-50">
+          {quickLinks.map(({ label, icon: Icon, onClick }) => (
+            <button key={label} onClick={onClick}
+              className="flex items-center gap-3 w-full py-3 text-left active:scale-98 transition-transform">
+              <Icon size={18} className="text-reads-muted flex-shrink-0" />
+              <span className="text-reads-navy font-semibold text-sm flex-1">{label}</span>
+              <ChevronRightIcon size={16} className="text-reads-muted-light flex-shrink-0" />
+            </button>
+          ))}
+        </div>
+      </div>
+
+      {toast && <Toast message={toast.msg} type={toast.type} onClose={() => setToast(null)} />}
     </div>
   );
 };
@@ -471,7 +522,7 @@ export default function App() {
         )}
 
         {view === 'more' && (
-          <MoreModule onNavigate={navigate} />
+          <MoreModule onNavigate={navigate} user={user} />
         )}
 
       </main>
