@@ -321,6 +321,13 @@ export const tutors = {
     post(`/tutors/sessions/${session_id}/messages`, { reason: content }),
   rateSession: (session_id, stars, comment) =>
     post(`/tutors/sessions/${session_id}/rate`, { stars, comment }),
+
+  // TODO(backend): platform overview stats for the Tutors landing page
+  // (expected shape: { total_tutors, subjects_covered, avg_rating, sessions_this_month }).
+  // Front-end falls back to client-derived values from the loaded tutor list until this exists.
+  getStats: () => get('/tutors/stats'),
+  // TODO(backend): tutor application flow — not built yet.
+  applyToTutor: (data) => post('/tutors/apply', data),
 };
 
 // ── Wallet ────────────────────────────────────────────────────────────────────
