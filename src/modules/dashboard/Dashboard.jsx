@@ -1,12 +1,15 @@
 import { useState, useEffect } from 'react';
-import { BookOpen, Coins, Trophy, ArrowRight, TrendingUp, Star, Zap, ChevronRight, GraduationCap } from 'lucide-react';
+import { BookOpen, Coins, Trophy, ArrowRight, TrendingUp, Star, Zap, ChevronRight, GraduationCap, Flame, Award, Clock, Lightbulb, Target } from 'lucide-react';
 import { api } from '../../services/api.js';
 import { TokenBadge, Badge, LoadingOverlay } from '../../components/UI.jsx';
 
-const StreakFlame = ({ count }) => (
-  <div className="flex items-center gap-1.5 bg-amber-50 border border-amber-200 rounded-full px-3 py-1">
-    <span className="text-base">🔥</span>
-    <span className="font-black text-amber-600 text-sm">{count} day streak</span>
+const StatTile = ({ icon: Icon, value, label, bg, color }) => (
+  <div className="reads-card p-3 text-center">
+    <div className={`w-8 h-8 rounded-lg ${bg} flex items-center justify-center mx-auto mb-2`}>
+      <Icon size={16} className={color} />
+    </div>
+    <p className="font-black text-reads-navy text-lg leading-none">{value}</p>
+    <p className="text-reads-muted text-xs mt-0.5">{label}</p>
   </div>
 );
 
@@ -34,6 +37,51 @@ const LessonCard = ({ lesson, onClick }) => (
   </button>
 );
 
+// "Pick up where you stopped" — the feature card the mockup leads with
+const ContinueLearningCard = ({ lesson, onClick }) => (
+  <div className="reads-card p-4">
+    <p className="text-reads-muted text-xs font-semibold uppercase tracking-wide mb-3">Pick up where you stopped</p>
+    <div className="flex gap-3">
+      <div className="w-16 h-16 bg-reads-green-bg rounded-2xl flex items-center justify-center flex-shrink-0">
+        <BookOpen size={26} className="text-reads-green" />
+      </div>
+      <div className="flex-1 min-w-0">
+        <p className="text-reads-navy font-black text-sm leading-snug truncate">{lesson.title}</p>
+        <p className="text-reads-muted text-xs mt-0.5">{lesson.subject}{lesson.track ? ` · ${lesson.track}` : ''}</p>
+        <div className="flex items-center gap-2 mt-2">
+          <TokenBadge amount={lesson.token_reward} />
+          {lesson.duration_minutes && (
+            <span className="text-reads-muted text-xs flex items-center gap-1">
+              <Clock size={11} /> {lesson.duration_minutes} min
+            </span>
+          )}
+        </div>
+      </div>
+    </div>
+    <button onClick={() => onClick(lesson)}
+      className="reads-btn-primary w-full mt-4 flex items-center justify-center gap-2">
+      Continue Lesson <ArrowRight size={16} />
+    </button>
+  </div>
+);
+
+// AI-recommendation chip, sourced from api.aiTutor.getRecommendations()
+const RecommendationRow = ({ rec, onClick }) => (
+  <button onClick={() => onClick(rec)}
+    className="flex items-center gap-3 w-full py-2.5 text-left active:scale-98 transition-transform">
+    <div className={`w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0 ${
+      rec.type === 'lesson' ? 'bg-reads-green-bg' : 'bg-purple-50'
+    }`}>
+      {rec.type === 'lesson' ? <Target size={16} className="text-reads-green" /> : <Lightbulb size={16} className="text-purple-600" />}
+    </div>
+    <div className="flex-1 min-w-0">
+      <p className="text-reads-navy font-semibold text-sm leading-tight truncate">{rec.title}</p>
+      {rec.subject && <p className="text-reads-muted text-xs mt-0.5">{rec.subject}</p>}
+    </div>
+    <ChevronRight size={16} className="text-reads-muted-light flex-shrink-0" />
+  </button>
+);
+
 const TransactionRow = ({ tx }) => {
   const isPositive = tx.type === 'earned' || tx.type === 'received';
   return (
@@ -58,19 +106,25 @@ export default function Dashboard({ user, wallet, onNavigate }) {
   const [recentLessons, setRecentLessons] = useState([]);
   const [recentTxs, setRecentTxs] = useState([]);
   const [stats, setStats] = useState({ lessons_completed: 0, quizzes_taken: 0, streak: 0 });
+  const [badgeCount, setBadgeCount] = useState(0);
+  const [recommendations, setRecommendations] = useState([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     const load = async () => {
       try {
-        const [lessonRes, txRes, statsRes] = await Promise.allSettled([
+        const [lessonRes, txRes, statsRes, achievementsRes, recsRes] = await Promise.allSettled([
           api.lessons.list({ limit: 5 }),
           api.wallet.getTransactions({ limit: 5 }),
           api.profile.getStats(),
+          api.profile.getAchievements(),
+          api.aiTutor.getRecommendations(),
         ]);
         if (lessonRes.status === 'fulfilled') setRecentLessons(lessonRes.value?.lessons || []);
         if (txRes.status === 'fulfilled') setRecentTxs(txRes.value?.transactions || []);
         if (statsRes.status === 'fulfilled') setStats(statsRes.value || stats);
+        if (achievementsRes.status === 'fulfilled') setBadgeCount((achievementsRes.value?.achievements || []).length);
+        if (recsRes.status === 'fulfilled') setRecommendations((recsRes.value?.recommendations || []).slice(0, 3));
       } catch (_) {}
       setLoading(false);
     };
@@ -80,20 +134,25 @@ export default function Dashboard({ user, wallet, onNavigate }) {
   const firstName = user?.full_name?.split(' ')[0] || 'Student';
   const hour = new Date().getHours();
   const greeting = hour < 12 ? 'Good morning' : hour < 17 ? 'Good afternoon' : 'Good evening';
+  const [continueLesson, ...upNextLessons] = recentLessons;
 
   return (
     <div className="px-4 pt-2 pb-4 space-y-6 animate-fade-in">
 
       {/* Greeting */}
-      <div className="flex items-start justify-between pt-2">
-        <div>
-          <p className="text-reads-muted text-sm">{greeting} 👋</p>
-          <h1 className="font-display font-black text-reads-navy text-2xl leading-tight">{firstName}</h1>
-          {user?.is_premium && (
-            <Badge label="⭐ Premium" variant="gold" className="mt-1" />
-          )}
-        </div>
-        {stats.streak > 0 && <StreakFlame count={stats.streak} />}
+      <div className="pt-2">
+        <p className="text-reads-muted text-sm">{greeting}, {firstName}! 👋</p>
+        <h1 className="font-display font-black text-reads-navy text-2xl leading-tight">Keep learning, keep growing.</h1>
+        {user?.is_premium && (
+          <Badge label="⭐ Premium" variant="gold" className="mt-1" />
+        )}
+      </div>
+
+      {/* Stats row: Lessons / Streak / Badges — mirrors the Home mockup's tri-stat row */}
+      <div className="grid grid-cols-3 gap-3">
+        <StatTile icon={BookOpen} value={stats.lessons_completed ?? 0} label="Lessons" bg="bg-reads-green-bg" color="text-reads-green" />
+        <StatTile icon={Flame} value={stats.streak ?? 0} label="Streak" bg="bg-amber-50" color="text-amber-600" />
+        <StatTile icon={Award} value={badgeCount} label="Badges" bg="bg-reads-gold/10" color="text-reads-gold-dark" />
       </div>
 
       {/* Wallet Card */}
@@ -128,23 +187,6 @@ export default function Dashboard({ user, wallet, onNavigate }) {
         </div>
       </div>
 
-      {/* Stats row */}
-      <div className="grid grid-cols-3 gap-3">
-        {[
-          { label: 'Lessons', value: stats.lessons_completed, icon: BookOpen, color: 'bg-reads-green-bg text-reads-green' },
-          { label: 'Quizzes', value: stats.quizzes_taken, icon: Zap, color: 'bg-reads-gold/10 text-reads-gold-dark' },
-          { label: 'Rank', value: stats.rank ?? '—', icon: Trophy, color: 'bg-reads-navy/10 text-reads-navy' },
-        ].map(({ label, value, icon: Icon, color }) => (
-          <div key={label} className="reads-card p-3 text-center">
-            <div className={`w-8 h-8 rounded-lg ${color} flex items-center justify-center mx-auto mb-2`}>
-              <Icon size={16} />
-            </div>
-            <p className="font-black text-reads-navy text-lg leading-none">{value}</p>
-            <p className="text-reads-muted text-xs mt-0.5">{label}</p>
-          </div>
-        ))}
-      </div>
-
       {/* Quick Actions */}
       <div>
         <h2 className="font-black text-reads-navy text-base mb-3">Quick Actions</h2>
@@ -156,24 +198,49 @@ export default function Dashboard({ user, wallet, onNavigate }) {
         </div>
       </div>
 
-      {/* Continue Learning */}
+      {/* Pick up where you stopped */}
       {loading ? (
         <LoadingOverlay message="Loading lessons…" />
-      ) : recentLessons.length > 0 ? (
+      ) : continueLesson ? (
+        <ContinueLearningCard lesson={continueLesson} onClick={(l) => onNavigate('learn', 'lesson', l)} />
+      ) : null}
+
+      {/* Up Next — remaining lessons as a horizontal scroller */}
+      {upNextLessons.length > 0 && (
         <div>
           <div className="flex items-center justify-between mb-3">
-            <h2 className="font-black text-reads-navy text-base">Continue Learning</h2>
+            <h2 className="font-black text-reads-navy text-base">Up Next</h2>
             <button onClick={() => onNavigate('learn')} className="text-reads-teal text-sm font-semibold flex items-center gap-1">
               View all <ArrowRight size={14} />
             </button>
           </div>
           <div className="flex gap-3 overflow-x-auto pb-2 -mx-4 px-4 scrollbar-hide" style={{ scrollbarWidth: 'none' }}>
-            {recentLessons.map((l) => (
+            {upNextLessons.map((l) => (
               <LessonCard key={l.id} lesson={l} onClick={() => onNavigate('learn', 'lesson', l)} />
             ))}
           </div>
         </div>
-      ) : null}
+      )}
+
+      {/* AI Review — personalized recommendations */}
+      {recommendations.length > 0 && (
+        <div>
+          <div className="flex items-center justify-between mb-3">
+            <div>
+              <h2 className="font-black text-reads-navy text-base">AI Review</h2>
+              <p className="text-reads-muted text-xs">Recommendations for you</p>
+            </div>
+            <button onClick={() => onNavigate('ai-tutor')} className="text-reads-teal text-sm font-semibold flex items-center gap-1">
+              View all <ChevronRight size={14} />
+            </button>
+          </div>
+          <div className="reads-card px-4 divide-y divide-gray-50">
+            {recommendations.map((r) => (
+              <RecommendationRow key={r.id} rec={r} onClick={() => onNavigate('ai-tutor')} />
+            ))}
+          </div>
+        </div>
+      )}
 
       {/* Recent Transactions */}
       {recentTxs.length > 0 && (
