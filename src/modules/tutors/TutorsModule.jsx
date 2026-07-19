@@ -2,16 +2,112 @@ import { useState, useEffect, useRef } from 'react';
 import {
   GraduationCap, Star, Clock, Calendar, MessageSquare,
   ChevronRight, Search, Loader2, ArrowLeft, Coins,
-  CheckCircle, XCircle, MessageCircle, AlertTriangle
+  CheckCircle, XCircle, MessageCircle, AlertTriangle,
+  Users, BookOpen, ShieldCheck, LayoutGrid, MoreHorizontal,
 } from 'lucide-react';
 import { api } from '../../services/api.js';
 import { LoadingOverlay, EmptyState, Badge, Modal, Toast, TokenBadge } from '../../components/UI.jsx';
 
+// ── Platform stat tile ────────────────────────────────────────────────────────
+const StatTile = ({ icon: Icon, value, label, sub, bg, color }) => (
+  <div className="reads-card p-3 text-center">
+    <div className={`w-9 h-9 rounded-xl ${bg} flex items-center justify-center mx-auto mb-2`}>
+      <Icon size={18} className={color} />
+    </div>
+    <p className="font-black text-reads-navy text-base leading-none">{value}</p>
+    <p className="text-reads-muted-light text-[10px] mt-1">{label}</p>
+  </div>
+);
+
+// ── Subject filter chip ───────────────────────────────────────────────────────
+const SubjectChip = ({ subject, active, onClick }) => (
+  <button onClick={onClick}
+    className={`flex-shrink-0 flex flex-col items-center gap-1.5 w-16 transition-transform active:scale-95`}>
+    <div className={`w-11 h-11 rounded-2xl flex items-center justify-center ${
+      active ? 'bg-reads-green text-white' : 'bg-gray-100 text-reads-muted'
+    }`}>
+      {subject === 'All Tutors' ? <LayoutGrid size={18} /> : subject === 'More' ? <MoreHorizontal size={18} /> : <BookOpen size={18} />}
+    </div>
+    <span className={`text-[10px] font-semibold text-center leading-tight ${active ? 'text-reads-green' : 'text-reads-muted'}`}>
+      {subject}
+    </span>
+  </button>
+);
+
+// ── Become a Tutor apply modal ────────────────────────────────────────────────
+function ApplyTutorModal({ onClose }) {
+  const [form, setForm] = useState({ specialization: '', subjects: '', experience: '' });
+  const [loading, setLoading] = useState(false);
+  const [submitted, setSubmitted] = useState(false);
+  const [error, setError] = useState('');
+
+  const set = (k) => (e) => setForm((f) => ({ ...f, [k]: e.target.value }));
+
+  const handle = async () => {
+    if (!form.specialization.trim() || !form.subjects.trim()) {
+      return setError('Fill in your specialization and subjects.');
+    }
+    setLoading(true); setError('');
+    try {
+      await api.tutors.applyToTutor(form);
+      setSubmitted(true);
+    } catch (e) {
+      // Endpoint isn't live yet — be honest rather than fake a success state.
+      setError("This feature is launching soon — we couldn't submit your application yet. Check back shortly!");
+    } finally { setLoading(false); }
+  };
+
+  if (submitted) return (
+    <Modal title="Application Sent" onClose={onClose}>
+      <div className="text-center py-4 space-y-3">
+        <CheckCircle size={40} className="text-reads-green mx-auto" />
+        <p className="text-reads-navy font-bold">Thanks for applying!</p>
+        <p className="text-reads-muted text-sm">We'll review your application and follow up by email.</p>
+        <button onClick={onClose} className="reads-btn-primary w-full">Done</button>
+      </div>
+    </Modal>
+  );
+
+  return (
+    <Modal title="Become a Tutor" onClose={onClose}>
+      <div className="space-y-4">
+        <div>
+          <label className="reads-label">Specialization</label>
+          <input className="reads-input" placeholder="e.g. Mathematics & Physics"
+            value={form.specialization} onChange={set('specialization')} />
+        </div>
+        <div>
+          <label className="reads-label">Subjects you can teach</label>
+          <input className="reads-input" placeholder="e.g. Mathematics, Physics, JAMB Prep"
+            value={form.subjects} onChange={set('subjects')} />
+        </div>
+        <div>
+          <label className="reads-label">Experience (optional)</label>
+          <textarea className="reads-input resize-none" rows={3}
+            placeholder="Tell us about your teaching or tutoring background…"
+            value={form.experience} onChange={set('experience')} />
+        </div>
+        {error && <p className="text-reads-red text-sm">{error}</p>}
+        <button onClick={handle} disabled={loading}
+          className="reads-btn-primary w-full flex items-center justify-center gap-2">
+          {loading && <Loader2 size={18} className="animate-spin" />}
+          Submit Application
+        </button>
+      </div>
+    </Modal>
+  );
+}
+
 // ── Tutor Card ────────────────────────────────────────────────────────────────
-function TutorCard({ tutor, onClick }) {
+function TutorCard({ tutor, onClick, topBadge = false }) {
   return (
     <button onClick={() => onClick(tutor)}
-      className="reads-card p-4 mb-3 w-full text-left active:scale-98 transition-transform">
+      className="reads-card p-4 mb-3 w-full text-left active:scale-98 transition-transform relative">
+      {topBadge && (
+        <span className="absolute top-3 left-3 bg-reads-green text-white text-[10px] font-black px-2 py-0.5 rounded-full z-10">
+          Top Tutor
+        </span>
+      )}
       <div className="flex items-start gap-3">
         <img
           src={tutor.avatar_url || `https://api.dicebear.com/8.x/initials/svg?seed=${encodeURIComponent(tutor.full_name)}&backgroundColor=16a34a&fontColor=ffffff`}
@@ -575,22 +671,41 @@ export default function TutorsModule({ tokenBalance, onUpdateBalance }) {
   const [tutors, setTutors] = useState([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
+  const [subjectFilter, setSubjectFilter] = useState('All Tutors');
   const [selected, setSelected] = useState(null);
   const [tab, setTab] = useState('browse'); // browse | sessions
+  const [platformStats, setPlatformStats] = useState(null);
+  const [showApply, setShowApply] = useState(false);
 
   useEffect(() => {
     api.tutors.list()
       .then((d) => setTutors(d?.tutors || []))
       .catch(() => {})
       .finally(() => setLoading(false));
+    api.tutors.getStats().then(setPlatformStats).catch(() => {}); // falls back to client-derived stats below
   }, []);
 
-  const filtered = tutors.filter((t) =>
-    !search ||
-    t.full_name?.toLowerCase().includes(search.toLowerCase()) ||
-    t.specialization?.toLowerCase().includes(search.toLowerCase()) ||
-    t.subjects?.some((s) => s.toLowerCase().includes(search.toLowerCase()))
-  );
+  // Top subjects derived from real tutor data — used for both the stat tile and chip row
+  const subjectCounts = tutors.reduce((acc, t) => {
+    (t.subjects || []).forEach((s) => { acc[s] = (acc[s] || 0) + 1; });
+    return acc;
+  }, {});
+  const topSubjects = Object.entries(subjectCounts).sort((a, b) => b[1] - a[1]).slice(0, 3).map(([s]) => s);
+  const avgRating = tutors.length
+    ? (tutors.reduce((s, t) => s + (t.rating || 0), 0) / tutors.length).toFixed(1)
+    : '—';
+
+  const filtered = tutors.filter((t) => {
+    const matchSearch = !search ||
+      t.full_name?.toLowerCase().includes(search.toLowerCase()) ||
+      t.specialization?.toLowerCase().includes(search.toLowerCase()) ||
+      t.subjects?.some((s) => s.toLowerCase().includes(search.toLowerCase()));
+    const matchSubject = subjectFilter === 'All Tutors' || subjectFilter === 'More' ||
+      t.subjects?.includes(subjectFilter);
+    return matchSearch && matchSubject;
+  });
+
+  const topRated = [...tutors].sort((a, b) => (b.rating || 0) - (a.rating || 0)).slice(0, 4);
 
   if (selected) {
     return (
@@ -618,22 +733,74 @@ export default function TutorsModule({ tokenBalance, onUpdateBalance }) {
           <Clock size={14} /> My Sessions
         </button>
       </div>
-      <p className="text-reads-muted text-sm mb-4">1-on-1 sessions with verified tutors</p>
+      <p className="text-reads-muted text-sm mb-4">Find expert tutors and get help to excel.</p>
 
-      <div className="relative mb-4">
+      <div className="relative mb-3">
         <Search size={18} className="absolute left-3 top-1/2 -translate-y-1/2 text-reads-muted-light" />
-        <input className="reads-input pl-10" placeholder="Search by name or subject…"
+        <input className="reads-input pl-10" placeholder="Search tutors or subjects…"
           value={search} onChange={(e) => setSearch(e.target.value)} />
       </div>
 
-      {loading ? (
-        <LoadingOverlay message="Loading tutors…" />
-      ) : filtered.length === 0 ? (
-        <EmptyState icon={GraduationCap} title="No tutors found"
-          description={search ? 'Try a different search.' : 'No tutors available yet.'} />
-      ) : (
-        filtered.map((t) => <TutorCard key={t.id} tutor={t} onClick={setSelected} />)
+      {/* Subject chips */}
+      <div className="flex gap-3 overflow-x-auto pb-1 mb-4 -mx-4 px-4" style={{ scrollbarWidth: 'none' }}>
+        {['All Tutors', ...topSubjects, 'More'].map((s) => (
+          <SubjectChip key={s} subject={s} active={subjectFilter === s}
+            onClick={() => setSubjectFilter(subjectFilter === s ? 'All Tutors' : s)} />
+        ))}
+      </div>
+
+      {/* Platform stats */}
+      {tutors.length > 0 && (
+        <div className="grid grid-cols-3 gap-2 mb-5">
+          <StatTile icon={Users} value={platformStats?.total_tutors ?? tutors.length} label="Tutors" bg="bg-reads-green-bg" color="text-reads-green" />
+          <StatTile icon={BookOpen} value={platformStats?.subjects_covered ?? Object.keys(subjectCounts).length} label="Subjects" bg="bg-purple-50" color="text-purple-600" />
+          <StatTile icon={Star} value={platformStats?.avg_rating ?? avgRating} label="Avg Rating" bg="bg-reads-gold/10" color="text-reads-gold-dark" />
+        </div>
       )}
+
+      {/* Top Rated Tutors */}
+      {!search && subjectFilter === 'All Tutors' && topRated.length > 0 && (
+        <div className="mb-5">
+          <p className="font-black text-reads-navy text-sm mb-2">Top Rated Tutors</p>
+          {topRated.map((t, i) => (
+            <TutorCard key={t.id} tutor={t} onClick={setSelected} topBadge={i === 0} />
+          ))}
+        </div>
+      )}
+
+      {/* All / filtered tutors — excludes tutors already shown above in Top Rated */}
+      {(() => {
+        const topRatedIds = new Set(!search && subjectFilter === 'All Tutors' ? topRated.map(t => t.id) : []);
+        const remaining = filtered.filter((t) => !topRatedIds.has(t.id));
+        const heading = search || subjectFilter !== 'All Tutors' ? 'Results' : 'More Tutors';
+        if (loading) return <LoadingOverlay message="Loading tutors…" />;
+        if (filtered.length === 0) return (
+          <EmptyState icon={GraduationCap} title="No tutors found"
+            description={search ? 'Try a different search.' : 'No tutors available yet.'} />
+        );
+        if (remaining.length === 0) return null;
+        return (
+          <>
+            <p className="font-black text-reads-navy text-sm mb-2">{heading}</p>
+            {remaining.map((t) => <TutorCard key={t.id} tutor={t} onClick={setSelected} />)}
+          </>
+        );
+      })()}
+
+      {/* Become a Tutor */}
+      <div className="relative bg-reads-navy rounded-2xl p-4 mt-2 overflow-hidden">
+        <div className="absolute top-0 right-0 w-24 h-24 bg-reads-gold/10 rounded-full -translate-y-8 translate-x-8" />
+        <div className="relative z-10">
+          <p className="font-black text-white text-sm mb-1">Become a Tutor</p>
+          <p className="text-white/70 text-xs mb-3">Share your knowledge and earn $READS points.</p>
+          <button onClick={() => setShowApply(true)}
+            className="bg-reads-gold text-reads-navy text-sm font-bold rounded-xl px-4 py-2 active:scale-95 transition-transform">
+            Apply Now
+          </button>
+        </div>
+      </div>
+
+      {showApply && <ApplyTutorModal onClose={() => setShowApply(false)} />}
     </div>
   );
 }
