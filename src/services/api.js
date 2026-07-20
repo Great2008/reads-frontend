@@ -466,6 +466,17 @@ export const admin = {
   suspendUser: (user_id) => post(`/admin/users/${user_id}/suspend`, {}),
   activateUser: (user_id) => post(`/admin/users/${user_id}/activate`, {}),
   deleteUser: (user_id) => del(`/admin/users/${user_id}`),
+  // TODO(backend): admin-initiated user creation — not built yet.
+  createUser: (data) => post('/admin/users', data),
+  // TODO(backend): CSV/export endpoint — not built yet.
+  exportUsersUrl: (params = {}) => {
+    const qs = new URLSearchParams(params).toString();
+    return `${API_URL}/admin/users/export${qs ? `?${qs}` : ''}`;
+  },
+  // TODO(backend): /admin/stats currently returns total_users, total_lessons,
+  // active_partners, pending_applications, pending_edit_requests. The Users page
+  // also wants active_users, new_users_7d, suspended_users, banned_users — add
+  // these to the same response when ready; front-end falls back to '—' until then.
 
   // Partner Applications
   getApplications: (params = {}) => {
