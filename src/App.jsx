@@ -25,6 +25,7 @@ import NotificationInbox    from './modules/notifications/NotificationInbox.jsx'
 import SchoolModule         from './modules/school/SchoolModule.jsx';
 import MarketplaceModule    from './modules/marketplace/MarketplaceModule.jsx';
 import TutorsModule         from './modules/tutors/TutorsModule.jsx';
+import CertificationsModule from './modules/certifications/CertificationsModule.jsx';
 import AdminModule          from './modules/admin/AdminModule.jsx';
 import PartnerModule        from './modules/partner/PartnerModule.jsx';
 
@@ -108,6 +109,7 @@ const MoreModule = ({ onNavigate, user }) => {
     { label: 'My School',    icon: School,        view: 'school',       color: '#16A34A', bg: '#f0fdf4' },
     { label: 'Marketplace',  icon: ShoppingBag,   view: 'marketplace', color: '#D4A017', bg: '#fffbeb' },
     { label: 'Tutors',       icon: GraduationCap, view: 'tutors',      color: '#6366F1', bg: '#eef2ff' },
+    { label: 'My Certifications', icon: Award,    view: 'certifications', color: '#0D1F3C', bg: '#eff6ff' },
     { label: 'Notifications',icon: Bell,          view: 'notifications',color: '#F59E0B', bg: '#fff7ed' },
     { label: 'Settings',     icon: SettingsIcon,  view: 'settings',     color: '#6B7280', bg: '#f9fafb' },
   ];
@@ -490,6 +492,10 @@ export default function App() {
 
         {view === 'school' && (
           <SchoolModule user={user} tokenBalance={tokenBalance} onBalanceUpdate={setTokenBalance} />
+        )}
+
+        {view === 'certifications' && (
+          <CertificationsModule user={user} />
         )}
 
         {/* Phase 2+ — Coming Soon */}

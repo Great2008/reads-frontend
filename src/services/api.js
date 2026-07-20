@@ -423,6 +423,21 @@ export const aiTutor = {
   getHistory: () => get('/ai-tutor/history'),
 };
 
+// ── Certifications ───────────────────────────────────────────────────────────
+// TODO(backend): the whole NFT/PDF certificates feature — nothing exists yet.
+// Expected /certifications response:
+//   { certificates: [{ id, title, description, type: 'course'|'quiz'|'special',
+//                       subject, on_chain, tx_hash, issuer, earned_at }],
+//     stats: { total_earned, on_chain_count, courses_completed, points_earned } }
+export const certifications = {
+  list: (params = {}) => {
+    const qs = new URLSearchParams(params).toString();
+    return get(`/certifications${qs ? '?' + qs : ''}`);
+  },
+  get: (id) => get(`/certifications/${id}`),
+  downloadUrl: (id) => `${API_URL}/certifications/${id}/download`,
+};
+
 // ── Profile ───────────────────────────────────────────────────────────────────
 export const profile = {
   getStats: () => get('/profile/stats'),
