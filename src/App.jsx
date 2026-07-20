@@ -216,7 +216,7 @@ const MoreModule = ({ onNavigate, user }) => {
 // ─────────────────────────────────────────────
 // Bottom Navigation Bar
 // ─────────────────────────────────────────────
-const BottomNav = ({ view, onNavigate, isAdmin, unreadCount }) => {
+const BottomNav = ({ view, onNavigate, unreadCount }) => {
   const tabs = [
     { name: 'Home',    icon: LayoutDashboard, view: 'dashboard' },
     { name: 'Learn',   icon: BookOpen,        view: 'learn' },
@@ -224,7 +224,6 @@ const BottomNav = ({ view, onNavigate, isAdmin, unreadCount }) => {
     { name: 'Profile', icon: User,            view: 'profile' },
     { name: 'More',    icon: Grid,            view: 'more' },
   ];
-  if (isAdmin) tabs.push({ name: 'Admin', icon: Shield, view: 'admin' });
 
   return (
     <nav className="fixed bottom-0 left-0 right-0 z-50 bg-white border-t border-gray-100 shadow-[0_-2px_16px_rgba(0,0,0,0.07)]">
@@ -299,6 +298,7 @@ export default function App() {
   const isPasswordReset = path === '/reset-password';
   const isStaffInvite   = path === '/accept-invite';
   const isClaimPage     = path === '/claim';
+  const isAdminPage     = path === '/admin';
 
   const navigate = (newView) => setView(newView);
 
@@ -406,6 +406,36 @@ export default function App() {
   if (isPasswordReset) return <ResetPasswordPage />;
   if (isClaimPage)     return <ClaimErrorBoundary><Suspense fallback={<ClaimFallback />}><ClaimPage /></Suspense></ClaimErrorBoundary>;
   if (isLoading)       return <LoadingScreen />;
+
+  // ── Admin portal — standalone at /admin, not part of the student app shell ──
+  if (isAdminPage) {
+    if (!user) {
+      return (
+        <>
+          <AuthModule onLoginSuccess={handleLoginSuccess} />
+          {globalToast && (
+            <div className={`fixed bottom-6 left-1/2 -translate-x-1/2 z-50 px-5 py-3 rounded-2xl shadow-xl text-sm font-semibold animate-fade-in
+              ${globalToast.type === 'error' ? 'bg-red-50 text-red-600 border border-red-200' : 'bg-green-50 text-reads-green border border-green-200'}`}>
+              {globalToast.msg}
+            </div>
+          )}
+        </>
+      );
+    }
+    if (!user.is_admin) {
+      return (
+        <div className="min-h-screen bg-gray-50 flex flex-col items-center justify-center gap-3 p-6 text-center">
+          <div className="w-16 h-16 bg-reads-red-bg rounded-2xl flex items-center justify-center">
+            <Shield size={28} className="text-reads-red" />
+          </div>
+          <p className="font-black text-reads-navy text-lg">Access Denied</p>
+          <p className="text-reads-muted text-sm max-w-xs">Your account doesn't have permission to view this page.</p>
+          <button onClick={handleLogout} className="reads-btn-outline mt-2 px-6 py-2 text-sm">Log Out</button>
+        </div>
+      );
+    }
+    return <AdminModule currentUserId={user.id} onLogout={handleLogout} />;
+  }
 
   // ── Unauthenticated ─────────────────────────────────────────────────────────
   if (!user) {
@@ -526,10 +556,6 @@ export default function App() {
           />
         )}
 
-        {view === 'admin' && user?.is_admin && (
-          <AdminModule currentUserId={user.id} />
-        )}
-
         {view === 'more' && (
           <MoreModule onNavigate={navigate} user={user} />
         )}
@@ -539,7 +565,6 @@ export default function App() {
       <BottomNav
         view={view}
         onNavigate={navigate}
-        isAdmin={user?.is_admin}
         unreadCount={unreadCount}
       />
     </div>

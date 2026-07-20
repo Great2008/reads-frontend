@@ -4,7 +4,7 @@ import {
   XCircle, Loader2, ChevronRight, AlertTriangle, Building2,
   GraduationCap, Settings, ClipboardList, Sparkles, Eye,
   Edit2, Trash2, Plus, Search, ArrowLeft, RefreshCw,
-  HelpCircle, FileText, School, Trophy
+  HelpCircle, FileText, School, Trophy, LogOut
 } from 'lucide-react';
 import { api } from '../../services/api.js';
 import {
@@ -2420,20 +2420,28 @@ const ADMIN_NAV = [
 // ─────────────────────────────────────────────
 // Main Admin Module
 // ─────────────────────────────────────────────
-export default function AdminModule({ currentUserId }) {
+export default function AdminModule({ currentUserId, onLogout }) {
   const [section, setSection] = useState('dashboard');
 
   return (
-    <div className="animate-fade-in">
+    <div className="min-h-screen bg-gray-50 animate-fade-in">
       {/* Admin badge header */}
-      <div className="px-4 pt-4 pb-2 flex items-center gap-2">
-        <div className="w-8 h-8 bg-reads-navy rounded-xl flex items-center justify-center">
-          <Shield size={16} className="text-reads-gold" />
+      <div className="px-4 pt-4 pb-2 flex items-center justify-between gap-2">
+        <div className="flex items-center gap-2">
+          <div className="w-8 h-8 bg-reads-navy rounded-xl flex items-center justify-center">
+            <Shield size={16} className="text-reads-gold" />
+          </div>
+          <div>
+            <p className="font-black text-reads-navy text-base">Admin Panel</p>
+            <p className="text-reads-muted text-xs">Full platform control</p>
+          </div>
         </div>
-        <div>
-          <p className="font-black text-reads-navy text-base">Admin Panel</p>
-          <p className="text-reads-muted text-xs">Full platform control</p>
-        </div>
+        {onLogout && (
+          <button onClick={onLogout}
+            className="flex items-center gap-1.5 text-reads-muted text-xs font-semibold px-3 py-2 rounded-xl bg-white border border-gray-200 active:scale-95 transition-transform">
+            <LogOut size={14} /> Log Out
+          </button>
+        )}
       </div>
 
       {/* Section tabs — horizontal scroll */}
