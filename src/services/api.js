@@ -421,6 +421,9 @@ export const aiTutor = {
   chat: (messages, context = {}) => post('/ai-tutor/chat', { messages, context }),
   getRecommendations: () => get('/ai-tutor/recommendations'),
   getHistory: () => get('/ai-tutor/history'),
+  // TODO(backend): learning-stats endpoint for the AI Tutor hub page — not built yet.
+  // Expected shape: { questions_asked, topics_explored, problems_solved, study_streak }
+  getStats: () => get('/ai-tutor/stats'),
 };
 
 // ── Certifications ───────────────────────────────────────────────────────────
