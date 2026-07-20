@@ -434,7 +434,7 @@ export default function App() {
         </div>
       );
     }
-    return <AdminModule currentUserId={user.id} onLogout={handleLogout} />;
+    return <AdminModule currentUserId={user.id} user={user} onLogout={handleLogout} />;
   }
 
   // ── Unauthenticated ─────────────────────────────────────────────────────────

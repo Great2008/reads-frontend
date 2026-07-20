@@ -4,7 +4,8 @@ import {
   XCircle, Loader2, ChevronRight, AlertTriangle, Building2,
   GraduationCap, Settings, ClipboardList, Sparkles, Eye,
   Edit2, Trash2, Plus, Search, ArrowLeft, RefreshCw,
-  HelpCircle, FileText, School, Trophy, LogOut
+  HelpCircle, FileText, School, Trophy, LogOut,
+  ShoppingBag, Award, Activity, Flag, TrendingUp, UserCheck,
 } from 'lucide-react';
 import { api } from '../../services/api.js';
 import {
@@ -15,18 +16,103 @@ import {
 // ─────────────────────────────────────────────
 // Stats Dashboard
 // ─────────────────────────────────────────────
-function AdminStats({ onNavigate }) {
+// ── Admin dashboard stat tile ─────────────────────────────────────────────────
+function AdminStatTile({ icon: Icon, value, label, trend, bg, color, onClick }) {
+  return (
+    <button onClick={onClick} className="reads-card p-3 text-left active:scale-95 transition-transform">
+      <div className={`w-8 h-8 rounded-lg ${bg} flex items-center justify-center mb-2`}>
+        <Icon size={16} className={color} />
+      </div>
+      <p className="font-black text-reads-navy text-lg leading-none">{value}</p>
+      <p className="text-reads-muted-light text-[10px] mt-1">{label}</p>
+      {trend != null && (
+        <p className={`text-[10px] font-bold mt-1 flex items-center gap-0.5 ${trend >= 0 ? 'text-reads-green' : 'text-reads-red'}`}>
+          <TrendingUp size={10} className={trend < 0 ? 'rotate-180' : ''} /> {Math.abs(trend)}%
+        </p>
+      )}
+    </button>
+  );
+}
+
+// ── Pending review row ────────────────────────────────────────────────────────
+function PendingReviewRow({ icon: Icon, label, count, onClick }) {
+  if (!count) return null;
+  return (
+    <button onClick={onClick}
+      className="flex items-center gap-3 w-full py-2.5 text-left active:scale-98 transition-transform">
+      <div className="w-8 h-8 bg-amber-50 rounded-lg flex items-center justify-center flex-shrink-0">
+        <Icon size={15} className="text-amber-600" />
+      </div>
+      <span className="text-reads-navy text-sm font-semibold flex-1">{label}</span>
+      <span className="bg-reads-red text-white text-xs font-black w-6 h-6 rounded-full flex items-center justify-center flex-shrink-0">
+        {count}
+      </span>
+    </button>
+  );
+}
+
+// ── Live activity row ─────────────────────────────────────────────────────────
+function ActivityRow({ event }) {
+  return (
+    <div className="flex items-start gap-3 py-2.5">
+      <div className="w-8 h-8 bg-reads-green-bg rounded-lg flex items-center justify-center flex-shrink-0 mt-0.5">
+        <Activity size={14} className="text-reads-green" />
+      </div>
+      <div className="flex-1 min-w-0">
+        <p className="text-reads-navy text-sm font-semibold leading-tight">{event.title}</p>
+        {event.description && <p className="text-reads-muted text-xs mt-0.5">{event.description}</p>}
+      </div>
+      <span className="text-reads-muted-light text-[10px] flex-shrink-0">{timeAgo(event.created_at)}</span>
+    </div>
+  );
+}
+
+function timeAgo(dateStr) {
+  if (!dateStr) return '';
+  const diffMs = Date.now() - new Date(dateStr).getTime();
+  const mins = Math.floor(diffMs / 60000);
+  if (mins < 1) return 'now';
+  if (mins < 60) return `${mins}m ago`;
+  const hrs = Math.floor(mins / 60);
+  if (hrs < 24) return `${hrs}h ago`;
+  return `${Math.floor(hrs / 24)}d ago`;
+}
+
+function AdminStats({ onNavigate, user }) {
   const [stats, setStats] = useState(null);
   const [revenue, setRevenue] = useState(null);
+  const [pending, setPending] = useState(null);
+  const [activity, setActivity] = useState([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    Promise.all([
+    Promise.allSettled([
       api.admin.getStats(),
       api.admin.getRevenue(),
-    ]).then(([s, r]) => { setStats(s); setRevenue(r); })
-      .catch(() => {})
-      .finally(() => setLoading(false));
+      api.admin.getSchools(),
+      api.admin.getMarketplaceItems(),
+      api.admin.getApplications({ status: 'pending' }),
+      api.admin.getEditRequests(),
+      api.admin.getTutorApplications(),
+      api.admin.getDisputes(),
+      api.admin.getCheatFlags({ status: 'pending' }),
+      api.admin.getActivityFeed(),
+    ]).then(([
+      statsR, revR, schoolsR, mktR, appsR, editsR, tutorsR, disputesR, flagsR, activityR,
+    ]) => {
+      if (statsR.status === 'fulfilled') setStats(statsR.value);
+      if (revR.status === 'fulfilled') setRevenue(revR.value);
+      setPending({
+        schools: schoolsR.status === 'fulfilled' ? (schoolsR.value?.schools?.length ?? null) : null,
+        marketplaceListings: mktR.status === 'fulfilled' ? (mktR.value?.items?.length ?? null) : null,
+        applications: appsR.status === 'fulfilled' ? (appsR.value?.applications?.length ?? 0) : 0,
+        editRequests: editsR.status === 'fulfilled' ? (editsR.value?.requests?.length ?? 0) : 0,
+        tutorVerifications: tutorsR.status === 'fulfilled' ? (tutorsR.value?.applications?.length ?? 0) : 0,
+        disputes: disputesR.status === 'fulfilled' ? (disputesR.value?.disputes?.length ?? 0) : 0,
+        cheatFlags: flagsR.status === 'fulfilled' ? (flagsR.value?.flags?.length ?? 0) : 0,
+      });
+      if (activityR.status === 'fulfilled') setActivity(activityR.value?.events || []);
+    }).finally(() => setLoading(false));
   }, []);
 
   if (loading) return <LoadingOverlay />;
@@ -39,20 +125,74 @@ function AdminStats({ onNavigate }) {
     exam:               'Exam Registrations',
   };
 
+  const firstName = user?.full_name?.split(' ')[0] || 'Admin';
+  const hour = new Date().getHours();
+  const greeting = hour < 12 ? 'Good morning' : hour < 17 ? 'Good afternoon' : 'Good evening';
+
+  const totalPendingReviews = pending
+    ? pending.applications + pending.editRequests + pending.tutorVerifications + pending.disputes + pending.cheatFlags
+    : 0;
+
   return (
     <div className="px-4 pt-2 pb-4 space-y-5 animate-fade-in">
-      <SectionHeader title="Admin Dashboard" subtitle="Platform overview" />
-      <div className="grid grid-cols-2 gap-3">
-        <StatCard icon={Users} label="Total Users" value={(stats?.total_users ?? 0).toLocaleString()} color="green" onClick={() => onNavigate('users')} />
-        <StatCard icon={BookOpen} label="Total Lessons" value={stats?.total_lessons ?? 0} color="navy" onClick={() => onNavigate('lessons')} />
-        <StatCard icon={Building2} label="Active Partners" value={stats?.active_partners ?? 0} color="gold" onClick={() => onNavigate('partners')} />
-        <StatCard icon={ClipboardList} label="Pending Applications" value={stats?.pending_applications ?? 0} color="red" onClick={() => onNavigate('applications')} />
+      <div>
+        <p className="font-display font-black text-reads-navy text-xl">{greeting}, {firstName}! 👋</p>
+        <p className="text-reads-muted text-sm">Here's what's happening across READS today.</p>
       </div>
 
-      {/* Platform Revenue */}
+      {/* 6 stat tiles */}
+      <div className="grid grid-cols-3 gap-2">
+        <AdminStatTile icon={Users} value={(stats?.total_users ?? 0).toLocaleString()} label="Users"
+          bg="bg-reads-green-bg" color="text-reads-green" onClick={() => onNavigate('users')} />
+        <AdminStatTile icon={BookOpen} value={(stats?.total_lessons ?? 0).toLocaleString()} label="Lessons"
+          bg="bg-blue-50" color="text-blue-600" onClick={() => onNavigate('lessons')} />
+        <AdminStatTile icon={School} value={pending?.schools ?? '—'} label="Schools"
+          bg="bg-purple-50" color="text-purple-600" onClick={() => onNavigate('applications')} />
+        <AdminStatTile icon={GraduationCap} value={stats?.total_tutors ?? '—'} label="Tutors"
+          bg="bg-amber-50" color="text-amber-600" onClick={() => onNavigate('applications')} />
+        <AdminStatTile icon={ShoppingBag} value={pending?.marketplaceListings ?? '—'} label="Listings"
+          bg="bg-orange-50" color="text-orange-600" />
+        <AdminStatTile icon={Award} value={stats?.certificates_issued ?? '—'} label="Certificates"
+          bg="bg-yellow-50" color="text-yellow-600" />
+      </div>
+
+      {/* Pending Reviews */}
+      <div className="reads-card p-4">
+        <div className="flex items-center justify-between mb-1">
+          <p className="font-black text-reads-navy text-sm">Pending Reviews</p>
+          {totalPendingReviews > 0 && (
+            <span className="text-reads-red text-xs font-bold">{totalPendingReviews} total</span>
+          )}
+        </div>
+        {totalPendingReviews === 0 ? (
+          <p className="text-reads-muted text-xs py-3 text-center">All caught up — nothing pending review.</p>
+        ) : (
+          <div className="divide-y divide-gray-50">
+            <PendingReviewRow icon={Building2} label="School Applications" count={pending.applications} onClick={() => onNavigate('applications')} />
+            <PendingReviewRow icon={Edit2} label="Lesson Edit Requests" count={pending.editRequests} onClick={() => onNavigate('edit-requests')} />
+            <PendingReviewRow icon={UserCheck} label="Tutor Verifications" count={pending.tutorVerifications} onClick={() => onNavigate('applications')} />
+            <PendingReviewRow icon={AlertTriangle} label="Dispute Cases" count={pending.disputes} onClick={() => onNavigate('disputes')} />
+            <PendingReviewRow icon={Flag} label="Cheat Flags" count={pending.cheatFlags} onClick={() => onNavigate('tournament')} />
+          </div>
+        )}
+      </div>
+
+      {/* Live Activity Feed */}
+      <div className="reads-card p-4">
+        <p className="font-black text-reads-navy text-sm mb-1">Live Activity Feed</p>
+        {activity.length === 0 ? (
+          <p className="text-reads-muted text-xs py-3 text-center">No recent activity to show.</p>
+        ) : (
+          <div className="divide-y divide-gray-50">
+            {activity.slice(0, 6).map((e) => <ActivityRow key={e.id} event={e} />)}
+          </div>
+        )}
+      </div>
+
+      {/* Revenue Overview */}
       <div className="reads-card p-4">
         <div className="flex items-center justify-between mb-3">
-          <p className="font-black text-reads-navy text-sm">Platform Revenue</p>
+          <p className="font-black text-reads-navy text-sm">Revenue Overview</p>
           <span className="text-reads-green font-black text-lg">{revenue?.total ?? 0} <span className="text-xs font-semibold">$READS</span></span>
         </div>
         {revenue?.breakdown && Object.keys(revenue.breakdown).length > 0 ? (
@@ -68,17 +208,6 @@ function AdminStats({ onNavigate }) {
           <p className="text-reads-muted text-xs">No revenue recorded yet.</p>
         )}
       </div>
-
-      {stats?.pending_edit_requests > 0 && (
-        <div className="bg-amber-50 border border-amber-200 rounded-2xl p-4 flex items-center gap-3">
-          <AlertTriangle size={20} className="text-amber-500 flex-shrink-0" />
-          <div className="flex-1">
-            <p className="font-bold text-amber-800 text-sm">{stats.pending_edit_requests} pending edit requests</p>
-            <p className="text-amber-600 text-xs">Schools are waiting for lesson edits to be reviewed.</p>
-          </div>
-          <button onClick={() => onNavigate('edit-requests')} className="text-amber-700 font-bold text-xs">Review</button>
-        </div>
-      )}
     </div>
   );
 }
@@ -2420,7 +2549,7 @@ const ADMIN_NAV = [
 // ─────────────────────────────────────────────
 // Main Admin Module
 // ─────────────────────────────────────────────
-export default function AdminModule({ currentUserId, onLogout }) {
+export default function AdminModule({ currentUserId, user, onLogout }) {
   const [section, setSection] = useState('dashboard');
 
   return (
@@ -2457,7 +2586,7 @@ export default function AdminModule({ currentUserId, onLogout }) {
       </div>
 
       {/* Content */}
-      {section === 'dashboard'     && <AdminStats onNavigate={setSection} />}
+      {section === 'dashboard'     && <AdminStats onNavigate={setSection} user={user} />}
       {section === 'users'         && <UsersSection />}
       {section === 'lessons'       && <LessonsSection />}
       {section === 'courses'       && <CoursesSection />}
