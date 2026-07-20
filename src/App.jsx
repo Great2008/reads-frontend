@@ -26,6 +26,7 @@ import SchoolModule         from './modules/school/SchoolModule.jsx';
 import MarketplaceModule    from './modules/marketplace/MarketplaceModule.jsx';
 import TutorsModule         from './modules/tutors/TutorsModule.jsx';
 import CertificationsModule from './modules/certifications/CertificationsModule.jsx';
+import AITutorModule        from './modules/ai-tutor/AITutorModule.jsx';
 import AdminModule          from './modules/admin/AdminModule.jsx';
 import PartnerModule        from './modules/partner/PartnerModule.jsx';
 
@@ -109,6 +110,7 @@ const MoreModule = ({ onNavigate, user }) => {
     { label: 'My School',    icon: School,        view: 'school',       color: '#16A34A', bg: '#f0fdf4' },
     { label: 'Marketplace',  icon: ShoppingBag,   view: 'marketplace', color: '#D4A017', bg: '#fffbeb' },
     { label: 'Tutors',       icon: GraduationCap, view: 'tutors',      color: '#6366F1', bg: '#eef2ff' },
+    { label: 'AI Tutor',     icon: Sparkles,      view: 'ai-tutor',    color: '#7C3AED', bg: '#f5f3ff' },
     { label: 'My Certifications', icon: Award,    view: 'certifications', color: '#0D1F3C', bg: '#eff6ff' },
     { label: 'Notifications',icon: Bell,          view: 'notifications',color: '#F59E0B', bg: '#fff7ed' },
     { label: 'Settings',     icon: SettingsIcon,  view: 'settings',     color: '#6B7280', bg: '#f9fafb' },
@@ -117,7 +119,6 @@ const MoreModule = ({ onNavigate, user }) => {
   // Phase 2+ features — locked with Coming Soon
   const soonTiles = [
     { label: 'Exams',        icon: ClipboardList, view: 'exams',       color: '#0D7A6E', bg: '#f0fdfa' },
-    { label: 'AI Tutor',     icon: Sparkles,      view: 'ai-tutor',    color: '#7C3AED', bg: '#f5f3ff' },
     { label: 'Challenge',    icon: Trophy,        view: 'challenge',   color: '#FFD700', bg: '#1a2a4a' },
     { label: 'My Results',   icon: Award,         view: 'student-portal', color: '#0D1F3C', bg: '#f0fdf4' },
   ];
@@ -515,7 +516,7 @@ export default function App() {
           <MarketplaceModule tokenBalance={tokenBalance} onUpdateBalance={setTokenBalance} />
         )}
         {view === 'ai-tutor' && (
-          <ComingSoon label="AI Tutor" onBack={() => navigate('more')} />
+          <AITutorModule user={user} />
         )}
 
         {view === 'notifications' && (
