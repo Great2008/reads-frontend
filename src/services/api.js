@@ -736,6 +736,7 @@ export const api = {
   wallet,
   marketplace,
   aiTutor,
+  certifications,
   profile,
   admin,
   partner,
