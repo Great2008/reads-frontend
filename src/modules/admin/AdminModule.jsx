@@ -6,6 +6,7 @@ import {
   Edit2, Trash2, Plus, Search, ArrowLeft, RefreshCw,
   HelpCircle, FileText, School, Trophy, LogOut,
   ShoppingBag, Award, Activity, Flag, TrendingUp, UserCheck,
+  Download, UserPlus, MoreVertical, X, SlidersHorizontal, Coins,
 } from 'lucide-react';
 import { api } from '../../services/api.js';
 import {
@@ -215,11 +216,182 @@ function AdminStats({ onNavigate, user }) {
 // ─────────────────────────────────────────────
 // User Management
 // ─────────────────────────────────────────────
+const ROLE_CHIPS = [
+  { key: 'all',       label: 'All Users' },
+  { key: 'student',   label: 'Students' },
+  { key: 'tutor',     label: 'Tutors' },
+  { key: 'school',    label: 'Schools' },
+  { key: 'admin',     label: 'Admins' },
+  { key: 'moderator', label: 'Moderators' },
+];
+
+function UserStatTile({ icon: Icon, value, label, trend, bg, color }) {
+  return (
+    <div className="reads-card p-3 flex-shrink-0 w-32">
+      <div className={`w-8 h-8 rounded-lg ${bg} flex items-center justify-center mb-2`}>
+        <Icon size={16} className={color} />
+      </div>
+      <p className="font-black text-reads-navy text-lg leading-none">{value}</p>
+      <p className="text-reads-muted-light text-[10px] mt-1">{label}</p>
+      {trend != null && (
+        <p className={`text-[10px] font-bold mt-1 ${trend >= 0 ? 'text-reads-green' : 'text-reads-red'}`}>
+          {trend >= 0 ? '↑' : '↓'} {Math.abs(trend)}%
+        </p>
+      )}
+    </div>
+  );
+}
+
+function UserRow({ u, onView, onToggleSuspend, onDelete }) {
+  const [menuOpen, setMenuOpen] = useState(false);
+  const isBanned = u.status === 'banned'; // only real if backend ever sets this — no ban action exists yet
+  return (
+    <div className="reads-card px-4 py-3">
+      <div className="flex items-center gap-3">
+        <img src={u.avatar_url || `https://api.dicebear.com/8.x/initials/svg?seed=${encodeURIComponent(u.full_name || u.email)}&backgroundColor=0d1f3c&fontColor=e8b84b`}
+          alt={u.full_name} className="w-10 h-10 rounded-xl flex-shrink-0" />
+        <div className="flex-1 min-w-0">
+          <p className="font-bold text-reads-navy text-sm truncate">{u.full_name || '(No name)'}</p>
+          <p className="text-reads-muted text-xs truncate">{u.email}</p>
+        </div>
+        <button onClick={() => onView(u)} className="text-reads-muted p-1.5 flex-shrink-0"><Eye size={16} /></button>
+        <div className="relative flex-shrink-0">
+          <button onClick={() => setMenuOpen((v) => !v)} className="text-reads-muted p-1.5"><MoreVertical size={16} /></button>
+          {menuOpen && (
+            <>
+              <div className="fixed inset-0 z-10" onClick={() => setMenuOpen(false)} />
+              <div className="absolute right-0 top-9 z-20 bg-white rounded-xl shadow-lg border border-gray-100 py-1 w-40">
+                <button onClick={() => { setMenuOpen(false); onToggleSuspend(u); }}
+                  className="w-full text-left px-3 py-2 text-sm text-reads-navy hover:bg-gray-50">
+                  {u.is_suspended ? 'Restore Access' : 'Suspend User'}
+                </button>
+                <button onClick={() => { setMenuOpen(false); onDelete(u); }}
+                  className="w-full text-left px-3 py-2 text-sm text-reads-red hover:bg-gray-50">
+                  Delete User
+                </button>
+              </div>
+            </>
+          )}
+        </div>
+      </div>
+      <div className="flex items-center gap-2 mt-2.5 flex-wrap">
+        <Badge label={u.role || 'student'} variant={u.is_admin ? 'navy' : 'gray'} className="capitalize" />
+        {u.school_name && <span className="text-reads-muted text-xs truncate max-w-[120px]">{u.school_name}</span>}
+        {u.wallet_balance != null && (
+          <span className="flex items-center gap-1 text-reads-muted text-xs">
+            <Coins size={11} className="text-reads-gold-dark" /> {u.wallet_balance.toLocaleString()} $READS
+          </span>
+        )}
+        {u.level != null && <span className="text-reads-muted text-xs">Level {u.level}</span>}
+        <span className={`ml-auto flex items-center gap-1 text-xs font-bold ${
+          isBanned ? 'text-reads-red' : u.is_suspended ? 'text-amber-600' : 'text-reads-green'
+        }`}>
+          <span className={`w-1.5 h-1.5 rounded-full ${
+            isBanned ? 'bg-reads-red' : u.is_suspended ? 'bg-amber-500' : 'bg-reads-green'
+          }`} />
+          {isBanned ? 'Banned' : u.is_suspended ? 'Suspended' : 'Active'}
+        </span>
+      </div>
+      {u.created_at && (
+        <p className="text-reads-muted-light text-[10px] mt-1.5">
+          Joined {new Date(u.created_at).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' })}
+        </p>
+      )}
+    </div>
+  );
+}
+
+function AddUserModal({ onClose, onCreated, showToast }) {
+  const [form, setForm] = useState({ full_name: '', email: '', role: 'student' });
+  const [loading, setLoading] = useState(false);
+  const set = (k) => (e) => setForm((f) => ({ ...f, [k]: e.target.value }));
+
+  const submit = async () => {
+    if (!form.full_name.trim() || !form.email.trim()) return showToast('Name and email are required.', 'error');
+    setLoading(true);
+    try {
+      await api.admin.createUser(form);
+      showToast('User created.');
+      onCreated();
+      onClose();
+    } catch (e) {
+      // Endpoint isn't live yet — be honest rather than fake a created user.
+      showToast("Admin-created users aren't supported by the backend yet.", 'error');
+    } finally { setLoading(false); }
+  };
+
+  return (
+    <Modal title="Add User" onClose={onClose}>
+      <div className="space-y-4">
+        <div>
+          <label className="reads-label">Full Name</label>
+          <input className="reads-input" value={form.full_name} onChange={set('full_name')} />
+        </div>
+        <div>
+          <label className="reads-label">Email</label>
+          <input className="reads-input" type="email" value={form.email} onChange={set('email')} />
+        </div>
+        <div>
+          <label className="reads-label">Role</label>
+          <select className="reads-input" value={form.role} onChange={set('role')}>
+            <option value="student">Student</option>
+            <option value="tutor">Tutor</option>
+            <option value="moderator">Moderator</option>
+            <option value="admin">Admin</option>
+          </select>
+        </div>
+        <button onClick={submit} disabled={loading} className="reads-btn-primary w-full flex items-center justify-center gap-2">
+          {loading && <Loader2 size={16} className="animate-spin" />} Create User
+        </button>
+      </div>
+    </Modal>
+  );
+}
+
+function UserDetailModal({ user: u, onClose }) {
+  return (
+    <Modal title="User Details" onClose={onClose}>
+      <div className="space-y-3">
+        <div className="flex items-center gap-3 mb-2">
+          <img src={u.avatar_url || `https://api.dicebear.com/8.x/initials/svg?seed=${encodeURIComponent(u.full_name || u.email)}&backgroundColor=0d1f3c&fontColor=e8b84b`}
+            className="w-14 h-14 rounded-2xl" alt={u.full_name} />
+          <div>
+            <p className="font-black text-reads-navy">{u.full_name || '(No name)'}</p>
+            <p className="text-reads-muted text-sm">{u.email}</p>
+          </div>
+        </div>
+        {[
+          ['Role', u.role],
+          ['School / Institution', u.school_name],
+          ['Wallet Balance', u.wallet_balance != null ? `${u.wallet_balance.toLocaleString()} $READS` : null],
+          ['Level', u.level != null ? `Level ${u.level}` : null],
+          ['Status', u.is_suspended ? 'Suspended' : 'Active'],
+          ['Joined', u.created_at ? new Date(u.created_at).toLocaleDateString() : null],
+        ].filter(([, v]) => v).map(([label, value]) => (
+          <div key={label} className="flex justify-between py-2 border-b border-gray-50 last:border-0">
+            <span className="text-reads-muted text-sm">{label}</span>
+            <span className="text-reads-navy text-sm font-semibold capitalize">{value}</span>
+          </div>
+        ))}
+      </div>
+    </Modal>
+  );
+}
+
 function UsersSection() {
   const [users, setUsers] = useState([]);
+  const [stats, setStats] = useState(null);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
+  const [roleFilter, setRoleFilter] = useState('all');
+  const [statusFilter, setStatusFilter] = useState('');
+  const [showFilters, setShowFilters] = useState(false);
+  const [page, setPage] = useState(1);
+  const [hasMore, setHasMore] = useState(false);
   const [toast, setToast] = useState(null);
+  const [addOpen, setAddOpen] = useState(false);
+  const [viewing, setViewing] = useState(null);
+  const LIMIT = 10;
 
   const showToast = (msg, type = 'success') => {
     setToast({ msg, type }); setTimeout(() => setToast(null), 3000);
@@ -227,13 +399,22 @@ function UsersSection() {
 
   const load = () => {
     setLoading(true);
-    api.admin.getUsers(search ? { search } : {})
-      .then((d) => setUsers(d?.users || []))
+    const params = { page, limit: LIMIT };
+    if (search) params.search = search;
+    if (roleFilter !== 'all') params.role = roleFilter;
+    if (statusFilter) params.status = statusFilter;
+    api.admin.getUsers(params)
+      .then((d) => {
+        const list = d?.users || [];
+        setUsers(list);
+        setHasMore(list.length === LIMIT);
+      })
       .catch(() => {})
       .finally(() => setLoading(false));
   };
 
-  useEffect(() => { load(); }, []);
+  useEffect(() => { load(); }, [page, roleFilter, statusFilter]);
+  useEffect(() => { api.admin.getStats().then(setStats).catch(() => {}); }, []);
 
   const handleToggleSuspend = async (user) => {
     try {
@@ -244,43 +425,108 @@ function UsersSection() {
     } catch (e) { showToast(e.message, 'error'); }
   };
 
+  const handleDelete = async (user) => {
+    if (!confirm(`Permanently delete ${user.full_name || user.email}? This cannot be undone.`)) return;
+    try {
+      await api.admin.deleteUser(user.id);
+      showToast('User deleted.');
+      load();
+    } catch (e) { showToast(e.message, 'error'); }
+  };
+
+  const handleExport = () => {
+    const params = {};
+    if (search) params.search = search;
+    if (roleFilter !== 'all') params.role = roleFilter;
+    if (statusFilter) params.status = statusFilter;
+    window.open(api.admin.exportUsersUrl(params), '_blank');
+  };
+
   return (
     <div className="px-4 pt-2 pb-4 animate-fade-in">
-      <SectionHeader title="Users" subtitle={`${users.length} total`} />
+      <SectionHeader title="Users" subtitle="Manage all users on the platform" />
       <div className="flex gap-2 mb-4">
+        <button onClick={handleExport} className="reads-btn-outline flex-1 flex items-center justify-center gap-1.5 text-sm py-2">
+          <Download size={14} /> Export
+        </button>
+        <button onClick={() => setAddOpen(true)} className="reads-btn-primary flex-1 flex items-center justify-center gap-1.5 text-sm py-2">
+          <UserPlus size={14} /> Add User
+        </button>
+      </div>
+
+      {/* Stats row */}
+      <div className="flex gap-2 overflow-x-auto pb-1 mb-4 -mx-4 px-4" style={{ scrollbarWidth: 'none' }}>
+        <UserStatTile icon={Users} value={(stats?.total_users ?? 0).toLocaleString()} label="Total Users" bg="bg-reads-green-bg" color="text-reads-green" />
+        <UserStatTile icon={UserCheck} value={stats?.active_users?.toLocaleString() ?? '—'} label="Active Users" bg="bg-blue-50" color="text-blue-600" />
+        <UserStatTile icon={UserPlus} value={stats?.new_users_7d ?? '—'} label="New (7 Days)" bg="bg-purple-50" color="text-purple-600" />
+        <UserStatTile icon={AlertTriangle} value={stats?.suspended_users ?? '—'} label="Suspended" bg="bg-amber-50" color="text-amber-600" />
+        <UserStatTile icon={XCircle} value={stats?.banned_users ?? '—'} label="Banned" bg="bg-reads-red-bg" color="text-reads-red" />
+      </div>
+
+      {/* Role chips */}
+      <div className="flex gap-2 overflow-x-auto pb-1 mb-3 -mx-4 px-4" style={{ scrollbarWidth: 'none' }}>
+        {ROLE_CHIPS.map((c) => (
+          <button key={c.key} onClick={() => { setRoleFilter(c.key); setPage(1); }}
+            className={`px-3 py-1.5 rounded-full text-xs font-semibold whitespace-nowrap flex-shrink-0 transition-all ${
+              roleFilter === c.key ? 'bg-reads-green text-white' : 'bg-gray-100 text-reads-muted'
+            }`}>
+            {c.label}
+          </button>
+        ))}
+      </div>
+
+      {/* Search + filters */}
+      <div className="flex gap-2 mb-2">
         <div className="relative flex-1">
           <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-reads-muted-light" />
-          <input className="reads-input pl-9 text-sm" placeholder="Search by name or email…"
+          <input className="reads-input pl-9 text-sm" placeholder="Search users, email, phone, school…"
             value={search} onChange={(e) => setSearch(e.target.value)}
-            onKeyDown={(e) => e.key === 'Enter' && load()} />
+            onKeyDown={(e) => e.key === 'Enter' && (setPage(1), load())} />
         </div>
+        <button onClick={() => setShowFilters((v) => !v)}
+          className={`px-3 py-2 rounded-xl border ${showFilters ? 'bg-reads-green-bg border-reads-green text-reads-green' : 'border-gray-200 text-reads-muted'}`}>
+          <SlidersHorizontal size={16} />
+        </button>
         <button onClick={load} className="reads-btn-outline px-3 py-2">
           <RefreshCw size={16} />
         </button>
       </div>
+
+      {showFilters && (
+        <div className="reads-card p-3 mb-4 flex gap-2">
+          <select className="reads-input text-sm flex-1" value={statusFilter} onChange={(e) => { setStatusFilter(e.target.value); setPage(1); }}>
+            <option value="">All Status</option>
+            <option value="active">Active</option>
+            <option value="suspended">Suspended</option>
+          </select>
+          <button onClick={() => { setStatusFilter(''); setRoleFilter('all'); setSearch(''); setPage(1); }}
+            className="text-reads-muted text-xs font-semibold px-3">Clear</button>
+        </div>
+      )}
+
       {loading ? <LoadingOverlay /> : users.length === 0 ? (
         <EmptyState icon={Users} title="No users found" />
       ) : (
         <div className="space-y-2">
           {users.map((u) => (
-            <div key={u.id} className="reads-card px-4 py-3 flex items-center gap-3">
-              <img src={`https://api.dicebear.com/8.x/initials/svg?seed=${encodeURIComponent(u.full_name || u.email)}&backgroundColor=0d1f3c&fontColor=e8b84b`}
-                alt={u.full_name} className="w-10 h-10 rounded-xl flex-shrink-0" />
-              <div className="flex-1 min-w-0">
-                <p className="font-bold text-reads-navy text-sm truncate">{u.full_name || '(No name)'}</p>
-                <p className="text-reads-muted text-xs truncate">{u.email}</p>
-              </div>
-              <div className="flex items-center gap-2">
-                <Badge label={u.role || 'student'} variant={u.is_admin ? 'navy' : 'gray'} />
-                <button onClick={() => handleToggleSuspend(u)}
-                  className={`text-xs font-bold px-2 py-1 rounded-lg ${u.is_suspended ? 'bg-reads-green-bg text-reads-green' : 'bg-reads-red-bg text-reads-red'}`}>
-                  {u.is_suspended ? 'Restore' : 'Suspend'}
-                </button>
-              </div>
-            </div>
+            <UserRow key={u.id} u={u} onView={setViewing} onToggleSuspend={handleToggleSuspend} onDelete={handleDelete} />
           ))}
         </div>
       )}
+
+      {/* Pagination */}
+      {(page > 1 || hasMore) && (
+        <div className="flex items-center justify-between mt-4">
+          <button onClick={() => setPage((p) => Math.max(1, p - 1))} disabled={page === 1}
+            className="reads-btn-outline px-4 py-2 text-sm disabled:opacity-40">Previous</button>
+          <span className="text-reads-muted text-sm font-semibold">Page {page}</span>
+          <button onClick={() => setPage((p) => p + 1)} disabled={!hasMore}
+            className="reads-btn-outline px-4 py-2 text-sm disabled:opacity-40">Next</button>
+        </div>
+      )}
+
+      {addOpen && <AddUserModal onClose={() => setAddOpen(false)} onCreated={load} showToast={showToast} />}
+      {viewing && <UserDetailModal user={viewing} onClose={() => setViewing(null)} />}
       {toast && <Toast message={toast.msg} type={toast.type} onClose={() => setToast(null)} />}
     </div>
   );
