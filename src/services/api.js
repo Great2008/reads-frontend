@@ -570,6 +570,11 @@ export const admin = {
     const qs = new URLSearchParams(params).toString();
     return get(`/admin/audit${qs ? `?${qs}` : ''}`);
   },
+
+  // TODO(backend): platform-wide activity feed for the admin dashboard — not built
+  // yet (distinct from the audit log, which only tracks admin actions).
+  // Expected shape: { events: [{ id, type, title, description, created_at }] }
+  getActivityFeed: () => get('/admin/activity-feed'),
 };
 
 // ── Partner (School/CBT Centre) Portal ────────────────────────────────────────
