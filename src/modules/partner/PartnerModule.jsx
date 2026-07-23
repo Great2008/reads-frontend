@@ -3,7 +3,7 @@ import {
   LayoutDashboard, Users, BookOpen, ClipboardList, Wallet,
   Settings, UserPlus, Upload, Download, ChevronRight,
   School, Loader2, ArrowLeft, CheckCircle, XCircle, Edit2, Trash2, GraduationCap, Plus, FileText, AlertCircle,
-  Calendar, TrendingUp, User, UserCheck, Bell
+  Calendar, TrendingUp, User, UserCheck, Bell, Shield, Award, LogOut, BookMarked, Grid,
 } from 'lucide-react';
 import { api } from '../../services/api.js';
 import SchoolPortalModule from './SchoolPortalModule.jsx';
@@ -977,6 +977,151 @@ function AffiliationRequestsSection() {
 }
 
 // ── Main Partner Module ───────────────────────────────────────────────────────
+// ── Management Hub ───────────────────────────────────────────────────────────
+function AuditLogView({ onBack }) {
+  const [logs, setLogs] = useState([]);
+  const [loading, setLoading] = useState(true);
+  useEffect(() => {
+    api.school.getAuditLog().then((d) => setLogs(d?.logs || [])).catch(() => {}).finally(() => setLoading(false));
+  }, []);
+  return (
+    <div className="px-4 pt-2 pb-4 animate-fade-in">
+      <button onClick={onBack} className="flex items-center gap-1.5 text-reads-muted text-sm mb-4"><ArrowLeft size={16} /> Back</button>
+      <h2 className="font-black text-reads-navy text-lg mb-4">Audit Logs</h2>
+      {loading ? <LoadingOverlay /> : logs.length === 0 ? (
+        <EmptyState icon={Shield} title="No activity logged" description="Staff actions across the school will appear here." />
+      ) : (
+        <div className="space-y-2">
+          {logs.map((l) => (
+            <div key={l.id} className="reads-card px-4 py-3">
+              <p className="text-reads-navy font-semibold text-sm">{l.action}</p>
+              <p className="text-reads-muted text-xs mt-0.5">{l.actor_name} {l.created_at ? `· ${new Date(l.created_at).toLocaleString()}` : ''}</p>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function LibraryItemsView({ onBack }) {
+  const [items, setItems] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [title, setTitle] = useState('');
+  const [adding, setAdding] = useState(false);
+  const [toast, showToast] = useState(null);
+  const flash = (msg, type = 'success') => { showToast({ msg, type }); setTimeout(() => showToast(null), 3000); };
+
+  const load = () => {
+    api.school.getLibraryItems().then((d) => setItems(d?.items || [])).catch(() => {}).finally(() => setLoading(false));
+  };
+  useEffect(load, []);
+
+  const add = async () => {
+    if (!title.trim()) return;
+    setAdding(true);
+    try { await api.school.addLibraryItem({ title }); setTitle(''); flash('Item added'); load(); }
+    catch (e) { flash(e.message || "Library management isn't supported by the backend yet.", 'error'); }
+    finally { setAdding(false); }
+  };
+
+  return (
+    <div className="px-4 pt-2 pb-4 animate-fade-in">
+      <button onClick={onBack} className="flex items-center gap-1.5 text-reads-muted text-sm mb-4"><ArrowLeft size={16} /> Back</button>
+      <h2 className="font-black text-reads-navy text-lg mb-4">Library Items</h2>
+      <div className="flex gap-2 mb-4">
+        <input className="reads-input flex-1" placeholder="Book or resource title" value={title} onChange={(e) => setTitle(e.target.value)} />
+        <button onClick={add} disabled={adding} className="reads-btn-primary px-4">{adding ? <Loader2 size={16} className="animate-spin" /> : <Plus size={16} />}</button>
+      </div>
+      {loading ? <LoadingOverlay /> : items.length === 0 ? (
+        <EmptyState icon={BookMarked} title="No library items" description="Add books and resources for your students." />
+      ) : (
+        <div className="space-y-2">
+          {items.map((i) => <div key={i.id} className="reads-card px-4 py-3 text-reads-navy font-semibold text-sm">{i.title}</div>)}
+        </div>
+      )}
+      {toast && <Toast message={toast.msg} type={toast.type} onClose={() => showToast(null)} />}
+    </div>
+  );
+}
+
+function ApplyFeatureView({ onBack }) {
+  const [feature, setFeature] = useState('tutorial_centre');
+  const [note, setNote] = useState('');
+  const [loading, setLoading] = useState(false);
+  const [submitted, setSubmitted] = useState(false);
+  const [error, setError] = useState('');
+
+  const submit = async () => {
+    setLoading(true); setError('');
+    try { await api.school.applyForFeature({ feature, note }); setSubmitted(true); }
+    catch (e) { setError("This isn't supported by the backend yet — we'll follow up once it's ready."); }
+    finally { setLoading(false); }
+  };
+
+  if (submitted) return (
+    <div className="px-4 pt-16 text-center animate-fade-in">
+      <CheckCircle size={44} className="text-reads-green mx-auto mb-4" />
+      <p className="font-black text-reads-navy text-lg">Application Submitted</p>
+      <button onClick={onBack} className="reads-btn-primary mt-6 px-8">Done</button>
+    </div>
+  );
+
+  return (
+    <div className="px-4 pt-2 pb-4 animate-fade-in">
+      <button onClick={onBack} className="flex items-center gap-1.5 text-reads-muted text-sm mb-4"><ArrowLeft size={16} /> Back</button>
+      <h2 className="font-black text-reads-navy text-lg mb-1">Apply for Additional Features</h2>
+      <p className="text-reads-muted text-xs mb-4">Unlock Tutorial Centre or Exam Centre capabilities for your school.</p>
+      <select className="reads-input mb-3" value={feature} onChange={(e) => setFeature(e.target.value)}>
+        <option value="tutorial_centre">Tutorial Centre</option>
+        <option value="exam_centre">Exam Centre</option>
+      </select>
+      <textarea className="reads-input resize-none mb-3" rows={4} placeholder="Tell us why (optional)" value={note} onChange={(e) => setNote(e.target.value)} />
+      {error && <p className="text-reads-red text-sm mb-3">{error}</p>}
+      <button onClick={submit} disabled={loading} className="reads-btn-primary w-full flex items-center justify-center gap-2">
+        {loading && <Loader2 size={16} className="animate-spin" />} Submit Application
+      </button>
+    </div>
+  );
+}
+
+function ManagementSection({ onLogout }) {
+  const [view, setView] = useState('hub');
+
+  if (view === 'audit') return <AuditLogView onBack={() => setView('hub')} />;
+  if (view === 'library') return <LibraryItemsView onBack={() => setView('hub')} />;
+  if (view === 'apply') return <ApplyFeatureView onBack={() => setView('hub')} />;
+
+  const tiles = [
+    { key: 'audit', label: 'Audit Logs', desc: 'View system activities', icon: Shield, color: '#7C3AED', bg: '#f5f3ff' },
+    { key: 'library', label: 'Library Items', desc: 'Add, remove library items', icon: BookMarked, color: '#0D7A6E', bg: '#f0fdfa' },
+    { key: 'apply', label: 'Partner Features', desc: 'Apply for additional access', icon: TrendingUp, color: '#D4A017', bg: '#fffbeb' },
+    { key: 'certificate', label: 'Partnership Certificate', desc: 'Download certificate', icon: Award, color: '#0D1F3C', bg: '#eff6ff' },
+  ];
+
+  return (
+    <div className="px-4 pt-2 pb-4 animate-fade-in">
+      <h2 className="font-black text-reads-navy text-lg mb-4">Management</h2>
+      <div className="grid grid-cols-2 gap-3 mb-5">
+        {tiles.map((t) => (
+          <button key={t.key}
+            onClick={() => t.key === 'certificate' ? window.open(api.school.partnershipCertificateUrl(), '_blank') : setView(t.key)}
+            className="reads-card p-4 text-left active:scale-95 transition-transform">
+            <div className="w-10 h-10 rounded-xl flex items-center justify-center mb-2" style={{ background: t.bg }}>
+              <t.icon size={18} style={{ color: t.color }} />
+            </div>
+            <p className="font-bold text-reads-navy text-sm">{t.label}</p>
+            <p className="text-reads-muted text-xs mt-0.5">{t.desc}</p>
+          </button>
+        ))}
+      </div>
+      <button onClick={onLogout} className="reads-card w-full px-4 py-3 flex items-center gap-3 text-reads-red font-semibold text-sm">
+        <LogOut size={16} /> Log Out
+      </button>
+    </div>
+  );
+}
+
 export default function PartnerModule({ user, onLogout }) {
   const [section, setSection] = useState('overview');
   const [stats, setStats] = useState({});
@@ -1027,28 +1172,25 @@ export default function PartnerModule({ user, onLogout }) {
           {section === 'sessions'      && <SessionsSection classes={classes} />}
           {section === 'school-profile' && <SchoolProfileSection />}
             {section === 'wallet' && <PartnerWalletSection />}
+            {section === 'management' && <ManagementSection onLogout={onLogout} />}
           </main>
 
           {/* Bottom nav */}
           <nav className="fixed bottom-0 left-0 right-0 z-50 bg-white border-t border-gray-100 shadow-[0_-2px_12px_rgba(0,0,0,0.06)]">
             <div className="max-w-lg mx-auto flex items-center justify-around px-2">
-              <button onClick={() => setSection('overview')}
-                className="flex flex-col items-center gap-1 py-3 px-4 min-w-[60px]">
-                <LayoutDashboard size={22} className={section === 'overview' ? 'text-reads-green' : 'text-reads-muted'} strokeWidth={section === 'overview' ? 2.5 : 1.8} />
-                <span className={`text-[10px] font-semibold ${section === 'overview' ? 'text-reads-green' : 'text-reads-muted'}`}>Overview</span>
-              </button>
-              {section !== 'overview' && (
-                <button onClick={() => setSection('overview')}
-                  className="flex flex-col items-center gap-1 py-3 px-4 min-w-[60px]">
-                  <ArrowLeft size={22} className="text-reads-muted" strokeWidth={1.8} />
-                  <span className="text-[10px] font-semibold text-reads-muted">Back</span>
+              {[
+                { key: 'overview', label: 'Home', icon: LayoutDashboard },
+                { key: 'students', label: 'Students', icon: Users },
+                { key: 'wallet', label: 'Wallet', icon: Wallet },
+                { key: 'portal', label: 'Portal', icon: BookOpen },
+                { key: 'management', label: 'Management', icon: Grid },
+              ].map(({ key, label, icon: Icon }) => (
+                <button key={key} onClick={() => setSection(key)}
+                  className="flex flex-col items-center gap-1 py-3 px-3 min-w-[56px]">
+                  <Icon size={20} className={section === key ? 'text-reads-green' : 'text-reads-muted'} strokeWidth={section === key ? 2.5 : 1.8} />
+                  <span className={`text-[9px] font-semibold ${section === key ? 'text-reads-green' : 'text-reads-muted'}`}>{label}</span>
                 </button>
-              )}
-              <button onClick={onLogout}
-                className="flex flex-col items-center gap-1 py-3 px-4 min-w-[60px]">
-                <Settings size={22} className="text-reads-muted" strokeWidth={1.8} />
-                <span className="text-[10px] font-semibold text-reads-muted">Log out</span>
-              </button>
+              ))}
             </div>
           </nav>
         </>

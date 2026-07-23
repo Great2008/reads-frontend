@@ -3,7 +3,7 @@ import {
   BookOpen, DollarSign, BarChart2, Layers,
   Plus, Trash2, Upload, Download, ChevronDown,
   Loader2, CheckCircle, XCircle, AlertCircle,
-  FileSpreadsheet, Users, BookMarked, Award
+  FileSpreadsheet, Users, BookMarked, Award, Search, ArrowLeft, MessageSquare,
 } from 'lucide-react';
 import { api } from '../../services/api.js';
 
@@ -63,6 +63,8 @@ const school = {
   getFeePayments: (fee_id) => api.get(`/school/fees/${fee_id}/payments`),
   recordPayment: (fee_id, data) => api.post(`/school/fees/${fee_id}/payments`, data),
   acknowledgePayment: (payment_id) => api.patch(`/school/fees/payments/${payment_id}/acknowledge`, {}),
+  getPaymentHistory: (params = {}) => { const q = new URLSearchParams(params).toString(); return api.get(`/school/payments/history${q ? '?' + q : ''}`); },
+  getStudents: (params = {}) => { const q = new URLSearchParams(params).toString(); return api.get(`/school/students${q ? '?' + q : ''}`); },
   downloadResultsTemplate: (class_id, term) => `/school/results/template/${class_id}/${term}`,
   uploadResults: (class_id, term, session_id, formData) => {
     const q = new URLSearchParams({ class_id, term, ...(session_id ? { session_id } : {}) }).toString();
@@ -71,6 +73,9 @@ const school = {
   getResults: (params = {}) => { const q = new URLSearchParams(params).toString(); return api.get(`/school/results${q ? '?' + q : ''}`); },
   manualResult: (data) => api.post('/school/results/manual', data),
   publishResult: (id) => api.patch(`/school/results/${id}/publish`, {}),
+  getBehaviourFlags: (params = {}) => { const q = new URLSearchParams(params).toString(); return api.get(`/school/behaviour-flags${q ? '?' + q : ''}`); },
+  getMessages: () => api.get('/school/messages'),
+  sendMessage: (data) => api.post('/school/messages', data),
 };
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -497,12 +502,160 @@ function CurriculumSection({ classes }) {
 // ═══════════════════════════════════════════════════════════════════════════
 // FEES SECTION
 // ═══════════════════════════════════════════════════════════════════════════
+// ── Manually Log Payment ──────────────────────────────────────────────────────
+function LogPaymentView({ fees, classes, onBack, onLogged, showToast }) {
+  const [feeId, setFeeId] = useState('');
+  const [students, setStudents] = useState([]);
+  const [studentSearch, setStudentSearch] = useState('');
+  const [studentId, setStudentId] = useState('');
+  const [amount, setAmount] = useState('');
+  const [method, setMethod] = useState('cash');
+  const [date, setDate] = useState(new Date().toISOString().slice(0, 10));
+  const [notes, setNotes] = useState('');
+  const [saving, setSaving] = useState(false);
+
+  useEffect(() => {
+    api.school.getStudents().then((d) => setStudents(d?.students || [])).catch(() => {});
+  }, []);
+
+  useEffect(() => {
+    const fee = fees.find((f) => f.id === feeId);
+    if (fee) setAmount(String(fee.amount));
+  }, [feeId, fees]);
+
+  const filteredStudents = students.filter((s) =>
+    !studentSearch || s.full_name?.toLowerCase().includes(studentSearch.toLowerCase()));
+
+  const submit = async () => {
+    if (!feeId || !studentId || !amount) return showToast('Select a fee, student, and amount', 'error');
+    setSaving(true);
+    try {
+      await school.recordPayment(feeId, {
+        student_id: studentId, amount_paid: parseFloat(amount), method, paid_at: date, notes,
+      });
+      showToast('Payment logged');
+      onLogged();
+    } catch (e) { showToast(e.message || 'Failed to log payment', 'error'); }
+    finally { setSaving(false); }
+  };
+
+  return (
+    <div className="px-4 pt-2 pb-4 animate-fade-in space-y-4">
+      <button onClick={onBack} className="flex items-center gap-1.5 text-reads-muted text-sm mb-1">
+        <ArrowLeft size={16} /> Back
+      </button>
+      <h2 className="font-black text-reads-navy text-lg">Manually Log Payment</h2>
+
+      <div>
+        <label className="reads-label">Fee Schedule</label>
+        <Select value={feeId} onChange={setFeeId} placeholder="— Select fee —"
+          options={fees.map((f) => ({ value: f.id, label: `${f.class_name} — Term ${f.term} (₦${f.amount?.toLocaleString()})` }))} />
+      </div>
+
+      <div>
+        <label className="reads-label">Student</label>
+        <div className="relative mb-2">
+          <Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-reads-muted-light" />
+          <input className="reads-input pl-9" placeholder="Search students…"
+            value={studentSearch} onChange={(e) => setStudentSearch(e.target.value)} />
+        </div>
+        <div className="max-h-40 overflow-y-auto space-y-1 border border-gray-100 rounded-xl p-1.5">
+          {filteredStudents.slice(0, 30).map((s) => (
+            <button key={s.id} onClick={() => setStudentId(s.id)}
+              className={`w-full text-left px-3 py-2 rounded-lg text-sm ${studentId === s.id ? 'bg-reads-green-bg text-reads-green font-bold' : 'text-reads-navy'}`}>
+              {s.full_name}
+            </button>
+          ))}
+          {filteredStudents.length === 0 && <p className="text-reads-muted text-xs text-center py-3">No students found</p>}
+        </div>
+      </div>
+
+      <div>
+        <label className="reads-label">Amount (₦)</label>
+        <input className="reads-input" type="number" value={amount} onChange={(e) => setAmount(e.target.value)} />
+      </div>
+
+      <div>
+        <label className="reads-label">Payment Method</label>
+        <Select value={method} onChange={setMethod}
+          options={[
+            { value: 'cash', label: 'Cash' },
+            { value: 'bank_transfer', label: 'Bank Transfer' },
+            { value: 'card', label: 'Card' },
+            { value: 'reads_wallet', label: '$READS Wallet' },
+          ]} />
+      </div>
+
+      <div>
+        <label className="reads-label">Payment Date</label>
+        <input className="reads-input" type="date" value={date} onChange={(e) => setDate(e.target.value)} />
+      </div>
+
+      <div>
+        <label className="reads-label">Notes (Optional)</label>
+        <textarea className="reads-input resize-none" rows={3} value={notes} onChange={(e) => setNotes(e.target.value)} />
+      </div>
+
+      <button onClick={submit} disabled={saving} className="reads-btn-primary w-full flex items-center justify-center gap-2">
+        {saving && <Loader2 size={16} className="animate-spin" />} Log Payment
+      </button>
+    </div>
+  );
+}
+
+// ── Fee Payment History (consolidated) ────────────────────────────────────────
+function PaymentHistoryView({ onBack }) {
+  const [payments, setPayments] = useState([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    school.getPaymentHistory()
+      .then((d) => setPayments(d?.payments || []))
+      .catch(() => {})
+      .finally(() => setLoading(false));
+  }, []);
+
+  return (
+    <div className="px-4 pt-2 pb-4 animate-fade-in">
+      <div className="flex items-center justify-between mb-4">
+        <button onClick={onBack} className="flex items-center gap-1.5 text-reads-muted text-sm">
+          <ArrowLeft size={16} /> Back
+        </button>
+        <button className="flex items-center gap-1.5 text-reads-green text-xs font-bold">
+          <Download size={14} /> Download
+        </button>
+      </div>
+      <h2 className="font-black text-reads-navy text-lg mb-4">Fee Payment History</h2>
+
+      {loading ? (
+        <div className="flex justify-center py-14"><Loader2 size={24} className="animate-spin text-reads-green" /></div>
+      ) : payments.length === 0 ? (
+        <EmptyCard icon={DollarSign} title="No payment records"
+          desc="Payments logged here, or paid by students directly, will show up as a consolidated history." />
+      ) : (
+        <div className="space-y-2">
+          {payments.map((p) => (
+            <div key={p.id} className="reads-card px-4 py-3 flex items-center justify-between">
+              <div>
+                <p className="font-bold text-reads-navy text-sm">{p.student_name}</p>
+                <p className="text-reads-muted text-xs">{p.fee_type || p.class_name} · {new Date(p.paid_at).toLocaleDateString()}</p>
+              </div>
+              <p className="font-black text-reads-navy text-sm">₦{p.amount_paid?.toLocaleString()}</p>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
 function FeesSection({ classes }) {
   const [fees, setFees] = useState([]);
   const [loading, setLoading] = useState(true);
   const [showAdd, setShowAdd] = useState(false);
   const [showPayments, setShowPayments] = useState(null);
   const [payments, setPayments] = useState([]);
+  const [view, setView] = useState('list'); // list | log | history
   const [form, setForm] = useState({ class_id: '', term: '1', amount: '', due_date: '' });
   const [saving, setSaving] = useState(false);
   const [toast, showToast] = useToast();
@@ -580,6 +733,19 @@ function FeesSection({ classes }) {
     </div>
   );
 
+  if (view === 'log') return (
+    <LogPaymentView fees={fees} classes={classes} showToast={showToast}
+      onBack={() => setView('list')}
+      onLogged={() => { setView('list'); loadFees(); }} />
+  );
+
+  if (view === 'history') return (
+    <PaymentHistoryView onBack={() => setView('list')} />
+  );
+
+  const totalCollectible = fees.reduce((s, f) => s + (f.amount || 0) * (f.total_payments || 0), 0);
+  const totalCollected = fees.reduce((s, f) => s + (f.amount || 0) * (f.acknowledged_payments || 0), 0);
+
   return (
     <div className="px-4 pt-2 pb-4 animate-fade-in space-y-4">
       <div className="flex items-center justify-between">
@@ -590,6 +756,32 @@ function FeesSection({ classes }) {
         <button onClick={() => setShowAdd(!showAdd)}
           className="flex items-center gap-1.5 text-reads-green font-bold text-sm">
           <Plus size={16} /> Add Fee
+        </button>
+      </div>
+
+      {/* Stats */}
+      <div className="grid grid-cols-3 gap-2">
+        <div className="reads-card p-3 text-center">
+          <p className="font-black text-reads-navy text-lg leading-none">{fees.length}</p>
+          <p className="text-reads-muted-light text-[10px] mt-1">Fee Schedules</p>
+        </div>
+        <div className="reads-card p-3 text-center">
+          <p className="font-black text-reads-green text-lg leading-none">₦{totalCollected.toLocaleString()}</p>
+          <p className="text-reads-muted-light text-[10px] mt-1">Collected</p>
+        </div>
+        <div className="reads-card p-3 text-center">
+          <p className="font-black text-reads-red text-lg leading-none">₦{Math.max(0, totalCollectible - totalCollected).toLocaleString()}</p>
+          <p className="text-reads-muted-light text-[10px] mt-1">Outstanding</p>
+        </div>
+      </div>
+
+      {/* Quick actions */}
+      <div className="flex gap-2">
+        <button onClick={() => setView('log')} className="reads-btn-primary flex-1 flex items-center justify-center gap-1.5 text-sm py-2.5">
+          <Plus size={14} /> Log Payment
+        </button>
+        <button onClick={() => setView('history')} className="reads-btn-outline flex-1 flex items-center justify-center gap-1.5 text-sm py-2.5">
+          <Download size={14} /> Payment History
         </button>
       </div>
 
@@ -1036,12 +1228,200 @@ function StudentsSection() {
     </div>
   );
 }
+// ═══════════════════════════════════════════════════════════════════════════
+// BEHAVIOUR & QUIZ FLAGS SECTION
+// ═══════════════════════════════════════════════════════════════════════════
+function BehaviourFlagsSection() {
+  const [flags, setFlags] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [filter, setFilter] = useState('all');
+
+  useEffect(() => {
+    school.getBehaviourFlags()
+      .then((d) => setFlags(d?.flags || []))
+      .catch(() => {})
+      .finally(() => setLoading(false));
+  }, []);
+
+  const filtered = flags.filter((f) => filter === 'all' || f.status === filter);
+  const underReview = flags.filter((f) => f.status === 'under_review').length;
+  const actioned = flags.filter((f) => f.status === 'actioned').length;
+
+  if (loading) return <div className="flex justify-center py-14"><Loader2 size={24} className="animate-spin text-reads-green" /></div>;
+
+  return (
+    <div className="px-4 pt-2 pb-4 animate-fade-in space-y-4">
+      <div>
+        <h2 className="font-black text-reads-navy text-lg">Behaviour & Quiz Flags</h2>
+        <p className="text-reads-muted text-xs">Suspicious quiz activity and behaviour reports for your students</p>
+      </div>
+
+      <div className="grid grid-cols-3 gap-2">
+        <div className="reads-card p-3 text-center">
+          <p className="font-black text-reads-navy text-lg leading-none">{flags.length}</p>
+          <p className="text-reads-muted-light text-[10px] mt-1">Total Flags</p>
+        </div>
+        <div className="reads-card p-3 text-center">
+          <p className="font-black text-amber-600 text-lg leading-none">{underReview}</p>
+          <p className="text-reads-muted-light text-[10px] mt-1">Under Review</p>
+        </div>
+        <div className="reads-card p-3 text-center">
+          <p className="font-black text-reads-green text-lg leading-none">{actioned}</p>
+          <p className="text-reads-muted-light text-[10px] mt-1">Action Taken</p>
+        </div>
+      </div>
+
+      <div className="flex gap-1.5">
+        {['all', 'under_review', 'actioned'].map((f) => (
+          <button key={f} onClick={() => setFilter(f)}
+            className={`px-3 py-1.5 rounded-full text-xs font-semibold transition-all ${
+              filter === f ? 'bg-reads-green text-white' : 'bg-gray-100 text-reads-muted'
+            }`}>
+            {f === 'all' ? 'All' : f === 'under_review' ? 'Under Review' : 'Action Taken'}
+          </button>
+        ))}
+      </div>
+
+      {filtered.length === 0 ? (
+        <EmptyCard icon={AlertCircle} title="No flags" desc="Flagged quiz or behaviour activity for your students will appear here." />
+      ) : (
+        <div className="space-y-2">
+          {filtered.map((f) => (
+            <div key={f.id} className="reads-card px-4 py-3">
+              <div className="flex items-start justify-between gap-2">
+                <div>
+                  <p className="font-bold text-reads-navy text-sm">{f.student_name}</p>
+                  <p className="text-reads-muted text-xs">{f.class_name} · {f.description}</p>
+                </div>
+                <span className={`text-[10px] font-bold px-2 py-1 rounded-full flex-shrink-0 ${
+                  f.status === 'actioned' ? 'bg-green-50 text-reads-green' : 'bg-amber-50 text-amber-600'
+                }`}>
+                  {f.status === 'actioned' ? 'Action Taken' : 'Under Review'}
+                </span>
+              </div>
+              {f.flagged_at && <p className="text-reads-muted-light text-[10px] mt-2">{new Date(f.flagged_at).toLocaleDateString()}</p>}
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// MESSAGES SECTION
+// ═══════════════════════════════════════════════════════════════════════════
+function MessagesSection({ classes }) {
+  const [messages, setMessages] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [composing, setComposing] = useState(false);
+  const [audience, setAudience] = useState('all'); // all | individual
+  const [classId, setClassId] = useState('');
+  const [title, setTitle] = useState('');
+  const [body, setBody] = useState('');
+  const [sending, setSending] = useState(false);
+  const [toast, showToast] = useToast();
+
+  const load = () => {
+    school.getMessages()
+      .then((d) => setMessages(d?.messages || []))
+      .catch(() => {})
+      .finally(() => setLoading(false));
+  };
+  useEffect(load, []);
+
+  const send = async () => {
+    if (!title.trim() || !body.trim()) return showToast('Add a title and message', 'error');
+    setSending(true);
+    try {
+      await school.sendMessage({ title, body, audience, class_id: audience === 'individual' ? classId : undefined });
+      showToast('Message sent');
+      setTitle(''); setBody(''); setComposing(false);
+      load();
+    } catch (e) { showToast(e.message || "Messaging isn't supported by the backend yet", 'error'); }
+    finally { setSending(false); }
+  };
+
+  if (loading) return <div className="flex justify-center py-14"><Loader2 size={24} className="animate-spin text-reads-green" /></div>;
+
+  if (composing) return (
+    <div className="px-4 pt-2 pb-4 animate-fade-in space-y-4">
+      <button onClick={() => setComposing(false)} className="flex items-center gap-1.5 text-reads-muted text-sm">
+        <ArrowLeft size={16} /> Back
+      </button>
+      <h2 className="font-black text-reads-navy text-lg">New Message</h2>
+
+      <div className="flex gap-1 bg-gray-100 p-1 rounded-2xl">
+        {[{ key: 'all', label: 'Broadcast' }, { key: 'individual', label: 'Individual Class' }].map((a) => (
+          <button key={a.key} onClick={() => setAudience(a.key)}
+            className={`flex-1 py-2 rounded-xl text-xs font-bold transition-all ${
+              audience === a.key ? 'bg-white text-reads-navy shadow-sm' : 'text-reads-muted'
+            }`}>
+            {a.label}
+          </button>
+        ))}
+      </div>
+
+      {audience === 'individual' && (
+        <Select value={classId} onChange={setClassId} placeholder="— Select class —"
+          options={classes.map((c) => ({ value: c.id, label: c.name }))} />
+      )}
+
+      <input className="reads-input" placeholder="Message title" value={title} onChange={(e) => setTitle(e.target.value)} />
+      <textarea className="reads-input resize-none" rows={5} placeholder="Write your message…" value={body} onChange={(e) => setBody(e.target.value)} />
+
+      <button onClick={send} disabled={sending} className="reads-btn-primary w-full flex items-center justify-center gap-2">
+        {sending && <Loader2 size={16} className="animate-spin" />} Send Message
+      </button>
+      {toast && <Toast {...toast} />}
+    </div>
+  );
+
+  return (
+    <div className="px-4 pt-2 pb-4 animate-fade-in space-y-4">
+      <div className="flex items-center justify-between">
+        <div>
+          <h2 className="font-black text-reads-navy text-lg">Messages</h2>
+          <p className="text-reads-muted text-xs">Send messages & notifications to students</p>
+        </div>
+        <button onClick={() => setComposing(true)} className="flex items-center gap-1.5 text-reads-green font-bold text-sm">
+          <Plus size={16} /> New
+        </button>
+      </div>
+
+      {messages.length === 0 ? (
+        <EmptyCard icon={MessageSquare} title="No messages yet" desc="Messages you send to students will appear here." />
+      ) : (
+        <div className="space-y-2">
+          {messages.map((m) => (
+            <div key={m.id} className="reads-card px-4 py-3">
+              <div className="flex items-center justify-between">
+                <p className="font-bold text-reads-navy text-sm">{m.title}</p>
+                <span className="text-reads-muted-light text-[10px] flex-shrink-0">
+                  {m.sent_at ? new Date(m.sent_at).toLocaleDateString() : ''}
+                </span>
+              </div>
+              <p className="text-reads-muted text-xs mt-1">{m.body}</p>
+              <span className="inline-block mt-1.5 text-[10px] font-semibold text-reads-green bg-reads-green-bg px-2 py-0.5 rounded-full">
+                {m.audience === 'individual' ? m.recipient_name || 'Class' : 'All Students'}
+              </span>
+            </div>
+          ))}
+        </div>
+      )}
+      {toast && <Toast {...toast} />}
+    </div>
+  );
+}
+
 const TABS = [
   { key: 'students',    label: 'Students',    icon: Users },
   { key: 'subjects',    label: 'Subjects',    icon: BookMarked },
   { key: 'curriculum',  label: 'Curriculum',  icon: Layers },
   { key: 'fees',        label: 'Fees',        icon: DollarSign },
   { key: 'results',     label: 'Results',     icon: Award },
+  { key: 'flags',       label: 'Flags',       icon: AlertCircle },
+  { key: 'messages',    label: 'Messages',    icon: MessageSquare },
 ];
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -1091,6 +1471,8 @@ export default function SchoolPortalModule({ onBack }) {
         {tab === 'curriculum' && <CurriculumSection classes={classes} />}
         {tab === 'fees'       && <FeesSection        classes={classes} />}
         {tab === 'results'    && <ResultsSection     classes={classes} />}
+        {tab === 'flags'      && <BehaviourFlagsSection />}
+        {tab === 'messages'   && <MessagesSection    classes={classes} />}
       </main>
     </div>
   );
