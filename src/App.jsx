@@ -27,6 +27,9 @@ import MarketplaceModule    from './modules/marketplace/MarketplaceModule.jsx';
 import TutorsModule         from './modules/tutors/TutorsModule.jsx';
 import CertificationsModule from './modules/certifications/CertificationsModule.jsx';
 import AITutorModule        from './modules/ai-tutor/AITutorModule.jsx';
+import TournamentModule     from './modules/tournament/TournamentModule.jsx';
+import HelpModule           from './modules/help/HelpModule.jsx';
+import ContactModule        from './modules/contact/ContactModule.jsx';
 import AdminModule          from './modules/admin/AdminModule.jsx';
 import PartnerModule        from './modules/partner/PartnerModule.jsx';
 
@@ -112,6 +115,7 @@ const MoreModule = ({ onNavigate, user }) => {
     { label: 'Tutors',       icon: GraduationCap, view: 'tutors',      color: '#6366F1', bg: '#eef2ff' },
     { label: 'AI Tutor',     icon: Sparkles,      view: 'ai-tutor',    color: '#7C3AED', bg: '#f5f3ff' },
     { label: 'My Certifications', icon: Award,    view: 'certifications', color: '#0D1F3C', bg: '#eff6ff' },
+    { label: 'Tournament',   icon: Trophy,        view: 'challenge',   color: '#D4A017', bg: '#fffbeb' },
     { label: 'Notifications',icon: Bell,          view: 'notifications',color: '#F59E0B', bg: '#fff7ed' },
     { label: 'Settings',     icon: SettingsIcon,  view: 'settings',     color: '#6B7280', bg: '#f9fafb' },
   ];
@@ -119,7 +123,6 @@ const MoreModule = ({ onNavigate, user }) => {
   // Phase 2+ features — locked with Coming Soon
   const soonTiles = [
     { label: 'Exams',        icon: ClipboardList, view: 'exams',       color: '#0D7A6E', bg: '#f0fdfa' },
-    { label: 'Challenge',    icon: Trophy,        view: 'challenge',   color: '#FFD700', bg: '#1a2a4a' },
     { label: 'My Results',   icon: Award,         view: 'student-portal', color: '#0D1F3C', bg: '#f0fdf4' },
   ];
 
@@ -135,8 +138,8 @@ const MoreModule = ({ onNavigate, user }) => {
   // Quick Links — Help/Contact/What's New have no backend endpoints yet;
   // Invite/Referral reuse the same referral_code already on the user object.
   const quickLinks = [
-    { label: 'Help & Support', icon: HelpCircle, onClick: () => showToast("Help center coming soon — email support in the meantime.") },
-    { label: 'Contact Us',     icon: MessageCircle, onClick: () => showToast('Contact form coming soon.') },
+    { label: 'Help & Support', icon: HelpCircle, onClick: () => onNavigate('help') },
+    { label: 'Contact Us',     icon: MessageCircle, onClick: () => onNavigate('contact') },
     { label: 'Invite Friends', icon: Users, onClick: copyReferral },
     { label: 'Referral Program', icon: Gift, onClick: copyReferral },
     { label: "What's New",     icon: Sparkles, onClick: () => showToast("You're on the latest version of READS.") },
@@ -534,7 +537,13 @@ export default function App() {
           <ComingSoon label="My Results" onBack={() => navigate('more')} />
         )}
         {view === 'challenge' && (
-          <ComingSoon label="Challenge" onBack={() => navigate('more')} />
+          <TournamentModule />
+        )}
+        {view === 'help' && (
+          <HelpModule onNavigate={navigate} />
+        )}
+        {view === 'contact' && (
+          <ContactModule />
         )}
         {view === 'tutors' && (
           <TutorsModule tokenBalance={tokenBalance} onUpdateBalance={setTokenBalance} />
