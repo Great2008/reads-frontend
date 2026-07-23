@@ -426,7 +426,11 @@ export const aiTutor = {
   getStats: () => get('/ai-tutor/stats'),
 };
 
-// ── Certifications ───────────────────────────────────────────────────────────
+// ── Support ───────────────────────────────────────────────────────────────────
+// TODO(backend): contact form submission — not built yet.
+export const support = {
+  sendMessage: (data) => post('/support/contact', data),
+};
 // TODO(backend): the whole NFT/PDF certificates feature — nothing exists yet.
 // Expected /certifications response:
 //   { certificates: [{ id, title, description, type: 'course'|'quiz'|'special',
@@ -690,6 +694,8 @@ export const tournament = {
   startQuiz: (id) => post(`/tournaments/${id}/start-quiz`, {}),
   submitQuiz: (id, data) => post(`/tournaments/${id}/submit-quiz`, data),
   reportCheat: (data) => post('/tournaments/cheat-event', data),
+  // TODO(backend): access-code redemption to unlock a tournament — not built yet.
+  redeemAccessCode: (code) => post('/tournaments/redeem-code', { code }),
 
   // Admin-facing
   adminList: () => get('/tournaments/admin/list'),
@@ -756,6 +762,7 @@ export const api = {
   marketplace,
   aiTutor,
   certifications,
+  support,
   profile,
   admin,
   partner,
