@@ -286,6 +286,36 @@ export const school = {
   getFeePayments: (fee_id) => get(`/school/fees/${fee_id}/payments`),
   recordPayment: (fee_id, data) => post(`/school/fees/${fee_id}/payments`, data),
   acknowledgeFee: (payment_id) => patch(`/school/fees/payments/${payment_id}/acknowledge`, {}),
+
+  // TODO(backend): consolidated payment history across all fee schedules — not
+  // built yet (payments are currently only fetchable per-fee via getFeePayments).
+  getPaymentHistory: (params = {}) => {
+    const qs = new URLSearchParams(params).toString();
+    return get(`/school/payments/history${qs ? `?${qs}` : ''}`);
+  },
+
+  // Messages — TODO(backend): none of this exists yet.
+  // Expected: { messages: [{ id, title, body, audience: 'all'|'individual',
+  //             recipient_name, sent_at }] }
+  getMessages: () => get('/school/messages'),
+  sendMessage: (data) => post('/school/messages', data),
+
+  // TODO(backend): student-flag review queue for the school (quiz/behaviour flags).
+  getBehaviourFlags: (params = {}) => {
+    const qs = new URLSearchParams(params).toString();
+    return get(`/school/behaviour-flags${qs ? `?${qs}` : ''}`);
+  },
+
+  // TODO(backend): none of the below exist yet.
+  getAuditLog: (params = {}) => {
+    const qs = new URLSearchParams(params).toString();
+    return get(`/school/audit-log${qs ? `?${qs}` : ''}`);
+  },
+  getLibraryItems: () => get('/school/library'),
+  addLibraryItem: (data) => post('/school/library', data),
+  removeLibraryItem: (id) => del(`/school/library/${id}`),
+  partnershipCertificateUrl: () => `${API_URL}/school/partnership-certificate`,
+  applyForFeature: (data) => post('/school/apply-feature', data),
 };
 
 // ── Content & Learning ────────────────────────────────────────────────────────
