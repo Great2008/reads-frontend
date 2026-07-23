@@ -1,30 +1,63 @@
 import { useState, useEffect } from 'react';
 import {
   Award, ShieldCheck, BookOpen, Star, ArrowLeft, Download, Share2,
-  CheckCircle, Sparkles, UserCheck, ChevronDown, MoreVertical,
+  CheckCircle, Sparkles, UserCheck, ChevronRight, Zap, Flame, Target,
 } from 'lucide-react';
 import { api } from '../../services/api.js';
 import { LoadingOverlay, EmptyState, Badge, Toast } from '../../components/UI.jsx';
 
 const TYPE_ICON = { course: BookOpen, quiz: Star, special: Award };
-
-const FILTERS = [
-  { key: 'all',     label: 'All Certificates' },
-  { key: 'course',  label: 'Course Certificates' },
-  { key: 'quiz',    label: 'Quiz Certificates' },
-  { key: 'special', label: 'Special Achievements' },
-  { key: 'on_chain',label: 'On-chain Certificates' },
+const TABS = [
+  { key: 'badges', label: 'Badges' },
+  { key: 'results', label: 'Results' },
+  { key: 'certificates', label: 'Certificates' },
 ];
 
-// ── Stat tile ──────────────────────────────────────────────────────────────────
-const StatTile = ({ icon: Icon, value, label, sub, bg, color }) => (
-  <div className="reads-card p-3">
-    <div className={`w-9 h-9 rounded-xl ${bg} flex items-center justify-center mb-2`}>
-      <Icon size={18} className={color} />
+// Badge icon lookup — falls back to a generic award icon for badge types we
+// don't specifically recognize by name.
+const BADGE_ICON = (title = '') => {
+  const t = title.toLowerCase();
+  if (t.includes('streak') || t.includes('consistent')) return Flame;
+  if (t.includes('quiz')) return Target;
+  if (t.includes('quick') || t.includes('fast')) return Zap;
+  return Award;
+};
+
+const gradeColor = (g) => (g === 'A' ? 'text-reads-green' : g === 'F' ? 'text-reads-red' : 'text-reads-navy');
+const gradeBg = (g) => (g === 'A' ? 'bg-reads-green-bg' : g === 'F' ? 'bg-reads-red-bg' : 'bg-gray-100');
+
+// ── Badge tile ─────────────────────────────────────────────────────────────────
+const BadgeTile = ({ achievement }) => {
+  const Icon = BADGE_ICON(achievement.title || achievement.name);
+  return (
+    <div className="reads-card p-4 text-center">
+      <div className="w-12 h-12 bg-reads-gold/10 rounded-2xl flex items-center justify-center mx-auto mb-2">
+        <Icon size={22} className="text-reads-gold-dark" />
+      </div>
+      <p className="text-reads-navy font-bold text-xs leading-tight">{achievement.title || achievement.name}</p>
+      {achievement.earned_at && (
+        <p className="text-reads-muted-light text-[10px] mt-1">
+          {new Date(achievement.earned_at).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}
+        </p>
+      )}
     </div>
-    <p className="font-black text-reads-navy text-lg leading-none">{value}</p>
-    <p className="text-reads-muted text-xs mt-1">{label}</p>
-    {sub && <p className="text-reads-muted-light text-[10px]">{sub}</p>}
+  );
+};
+
+// ── Result row (real data via students.getMyResults) ────────────────────────────
+const ResultRow = ({ r }) => (
+  <div className="reads-card px-4 py-3 flex items-center gap-3">
+    <div className={`w-12 h-12 rounded-xl flex flex-col items-center justify-center flex-shrink-0 ${gradeBg(r.grade)}`}>
+      <span className={`font-black text-sm leading-tight ${gradeColor(r.grade)}`}>{r.grade || '—'}</span>
+      {r.score != null && <span className="text-[9px] text-reads-muted font-semibold">{r.score}%</span>}
+    </div>
+    <div className="flex-1 min-w-0">
+      <p className="font-bold text-reads-navy text-sm truncate">{r.subject_name}</p>
+      {r.remarks && <p className="text-reads-muted text-xs mt-0.5 truncate">{r.remarks}</p>}
+    </div>
+    {!r.is_published && (
+      <span className="text-[10px] bg-amber-50 text-amber-600 font-bold px-2 py-0.5 rounded-full flex-shrink-0">Pending</span>
+    )}
   </div>
 );
 
@@ -135,27 +168,27 @@ function CertificateDetail({ cert, studentName, onBack, showToast }) {
 
 // ── Main Certifications Module ────────────────────────────────────────────────
 export default function CertificationsModule({ user }) {
+  const [tab, setTab] = useState('badges');
   const [certs, setCerts] = useState([]);
-  const [stats, setStats] = useState(null);
+  const [achievements, setAchievements] = useState([]);
+  const [results, setResults] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [filter, setFilter] = useState('all');
   const [selected, setSelected] = useState(null);
   const [toast, setToast] = useState(null);
 
   const showToast = (msg) => { setToast(msg); setTimeout(() => setToast(null), 3000); };
 
   useEffect(() => {
-    api.certifications.list()
-      .then((d) => { setCerts(d?.certificates || []); setStats(d?.stats || null); })
-      .catch(() => {}) // backend not live yet — empty state below, no fabricated certificates
-      .finally(() => setLoading(false));
+    Promise.allSettled([
+      api.certifications.list(),
+      api.profile.getAchievements(),
+      api.students.getMyResults(),
+    ]).then(([certR, achR, resR]) => {
+      if (certR.status === 'fulfilled') setCerts(certR.value?.certificates || []);
+      if (achR.status === 'fulfilled') setAchievements(achR.value?.achievements || []);
+      if (resR.status === 'fulfilled') setResults(resR.value?.results || []);
+    }).finally(() => setLoading(false));
   }, []);
-
-  const filtered = certs.filter((c) => {
-    if (filter === 'all') return true;
-    if (filter === 'on_chain') return c.on_chain;
-    return c.type === filter;
-  });
 
   if (selected) {
     return (
@@ -168,6 +201,12 @@ export default function CertificationsModule({ user }) {
     );
   }
 
+  const byTerm = results.reduce((acc, r) => {
+    const key = r.term ? `Term ${r.term}` : 'Results';
+    (acc[key] = acc[key] || []).push(r);
+    return acc;
+  }, {});
+
   return (
     <div className="px-4 pt-4 pb-8 animate-fade-in">
       <div className="flex items-center gap-2 mb-1">
@@ -176,45 +215,78 @@ export default function CertificationsModule({ user }) {
       </div>
       <p className="text-reads-muted text-sm mb-4">View, download and share your certificates.</p>
 
-      {/* Stats */}
-      <div className="grid grid-cols-2 gap-3 mb-4">
-        <StatTile icon={Award} value={stats?.total_earned ?? certs.length} label="Earned" sub="Total all time"
-          bg="bg-reads-green-bg" color="text-reads-green" />
-        <StatTile icon={ShieldCheck} value={stats?.on_chain_count ?? certs.filter(c => c.on_chain).length} label="On-chain" sub="Verified on blockchain"
-          bg="bg-purple-50" color="text-purple-600" />
-        <StatTile icon={BookOpen} value={stats?.courses_completed ?? '—'} label="Courses" sub="This month"
-          bg="bg-amber-50" color="text-amber-600" />
-        <StatTile icon={CheckCircle} value={stats?.points_earned ?? '—'} label="Points Earned" sub="From certified achievements"
-          bg="bg-blue-50" color="text-blue-600" />
-      </div>
-
-      {/* Filter chips */}
-      <div className="flex gap-2 overflow-x-auto pb-1 mb-4 -mx-4 px-4" style={{ scrollbarWidth: 'none' }}>
-        {FILTERS.map((f) => (
-          <button key={f.key} onClick={() => setFilter(f.key)}
-            className={`px-3 py-1.5 rounded-full text-xs font-semibold whitespace-nowrap flex-shrink-0 transition-all ${
-              filter === f.key ? 'bg-reads-green text-white' : 'bg-gray-100 text-reads-muted'
+      {/* Tabs */}
+      <div className="flex gap-1 bg-gray-100 p-1 rounded-2xl mb-4">
+        {TABS.map((t) => (
+          <button key={t.key} onClick={() => setTab(t.key)}
+            className={`flex-1 py-2 rounded-xl text-xs font-bold transition-all ${
+              tab === t.key ? 'bg-white text-reads-navy shadow-sm' : 'text-reads-muted'
             }`}>
-            {f.label}
+            {t.label}{t.key === 'badges' && achievements.length > 0 ? ` (${achievements.length})` : ''}
           </button>
         ))}
       </div>
 
-      {/* Certificate list */}
-      {loading ? (
-        <LoadingOverlay message="Loading certificates…" />
-      ) : filtered.length === 0 ? (
-        <EmptyState icon={Award} title="No certificates yet"
-          description="Complete lessons, quizzes, and courses to start earning certificates." />
-      ) : (
-        <div>
-          <p className="font-black text-reads-navy text-sm mb-2">Your Certificates</p>
-          {filtered.map((c) => <CertRow key={c.id} cert={c} onView={setSelected} />)}
-        </div>
+      {loading ? <LoadingOverlay message="Loading…" /> : (
+        <>
+          {/* ── Badges tab ─────────────────────────────────────────────── */}
+          {tab === 'badges' && (
+            <>
+              <div className="flex items-center justify-between mb-2">
+                <p className="font-black text-reads-navy text-sm">Badges</p>
+              </div>
+              {achievements.length === 0 ? (
+                <EmptyState icon={Award} title="No badges yet" description="Complete lessons and quizzes to start earning badges." />
+              ) : (
+                <div className="grid grid-cols-2 gap-3 mb-6">
+                  {achievements.map((a) => <BadgeTile key={a.id} achievement={a} />)}
+                </div>
+              )}
+
+              {certs.length > 0 && (
+                <div>
+                  <div className="flex items-center justify-between mb-2">
+                    <p className="font-black text-reads-navy text-sm">Recent Certificates</p>
+                    <button onClick={() => setTab('certificates')} className="text-reads-teal text-xs font-semibold">View all</button>
+                  </div>
+                  {certs.slice(0, 2).map((c) => <CertRow key={c.id} cert={c} onView={setSelected} />)}
+                </div>
+              )}
+            </>
+          )}
+
+          {/* ── Results tab (real data) ───────────────────────────────────── */}
+          {tab === 'results' && (
+            results.length === 0 ? (
+              <EmptyState icon={Award} title="No results yet" description="Results will appear here once published by your school." />
+            ) : (
+              <div className="space-y-4">
+                {Object.entries(byTerm).map(([term, items]) => (
+                  <div key={term}>
+                    <p className="font-black text-reads-navy text-xs uppercase tracking-widest mb-2">{term}</p>
+                    <div className="space-y-2">
+                      {items.map((r) => <ResultRow key={r.id} r={r} />)}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )
+          )}
+
+          {/* ── Certificates tab ──────────────────────────────────────────── */}
+          {tab === 'certificates' && (
+            certs.length === 0 ? (
+              <EmptyState icon={Award} title="No certificates yet"
+                description="Complete lessons, quizzes, and courses to start earning certificates." />
+            ) : (
+              <div>{certs.map((c) => <CertRow key={c.id} cert={c} onView={setSelected} />)}</div>
+            )
+          )}
+        </>
       )}
 
       {/* Certificate Features */}
-      <div className="reads-card p-4 mt-2">
+      <div className="reads-card p-4 mt-5">
         <p className="font-black text-reads-navy text-sm mb-3">Certificate Features</p>
         <div className="space-y-3">
           <div className="flex items-start gap-3">

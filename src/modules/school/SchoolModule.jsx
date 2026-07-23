@@ -62,7 +62,7 @@ const SubjectCard = ({ subject }) => (
 );
 
 // ── Assignment row ──────────────────────────────────────────────────────────────
-const AssignmentRow = ({ a }) => (
+const AssignmentRow = ({ a, onSubmit }) => (
   <div className="flex items-center gap-3 py-3 border-b border-gray-50 last:border-0">
     <div className="w-10 h-10 bg-reads-gold/10 rounded-xl flex items-center justify-center flex-shrink-0">
       <ClipboardList size={18} className="text-reads-gold-dark" />
@@ -73,10 +73,101 @@ const AssignmentRow = ({ a }) => (
         {a.subject}{a.due_date ? ` · Due ${new Date(a.due_date).toLocaleDateString()}` : ''}
       </p>
     </div>
-    <Badge
-      label={a.status === 'submitted' ? 'Submitted' : 'Pending'}
-      variant={a.status === 'submitted' ? 'green' : 'gold'}
-    />
+    {a.status === 'submitted' ? (
+      <Badge label="Submitted" variant="green" />
+    ) : (
+      <button onClick={() => onSubmit(a)} className="reads-btn-outline px-3 py-1.5 text-xs flex-shrink-0">
+        Submit
+      </button>
+    )}
+  </div>
+);
+
+// ── Assignment submission modal ───────────────────────────────────────────────
+function SubmitAssignmentModal({ assignment, onClose, onSubmitted, showToast }) {
+  const [response, setResponse] = useState('');
+  const [loading, setLoading] = useState(false);
+
+  const submit = async () => {
+    if (!response.trim()) return showToast('Write your response before submitting.', 'error');
+    setLoading(true);
+    try {
+      await api.students.submitAssignment(assignment.id, { response });
+      showToast('Assignment submitted!');
+      onSubmitted();
+      onClose();
+    } catch (e) {
+      // Endpoint isn't live yet — be honest rather than fake a submission.
+      showToast("Assignment submission isn't supported by the backend yet.", 'error');
+    } finally { setLoading(false); }
+  };
+
+  return (
+    <Modal title={assignment.title} onClose={onClose}>
+      <div className="space-y-4">
+        <p className="text-reads-muted text-sm">{assignment.subject}</p>
+        <div>
+          <label className="reads-label">Your Response</label>
+          <textarea className="reads-input resize-none" rows={6}
+            placeholder="Write your answer here…" value={response} onChange={(e) => setResponse(e.target.value)} />
+        </div>
+        <button onClick={submit} disabled={loading} className="reads-btn-primary w-full flex items-center justify-center gap-2">
+          {loading && <Loader2 size={16} className="animate-spin" />} Submit Assignment
+        </button>
+      </div>
+    </Modal>
+  );
+}
+
+// ── Rate School modal ─────────────────────────────────────────────────────────
+function RateSchoolModal({ onClose, showToast }) {
+  const [rating, setRating] = useState(0);
+  const [comment, setComment] = useState('');
+  const [loading, setLoading] = useState(false);
+
+  const submit = async () => {
+    if (!rating) return showToast('Select a star rating.', 'error');
+    setLoading(true);
+    try {
+      await api.students.rateSchool(rating, comment);
+      showToast('Thanks for your feedback!');
+      onClose();
+    } catch (e) {
+      showToast("Ratings aren't supported by the backend yet.", 'error');
+    } finally { setLoading(false); }
+  };
+
+  return (
+    <Modal title="Rate Your School" onClose={onClose}>
+      <div className="space-y-4">
+        <div className="flex justify-center gap-2">
+          {[1, 2, 3, 4, 5].map((n) => (
+            <button key={n} onClick={() => setRating(n)}>
+              <Star size={32} className={n <= rating ? 'text-reads-gold fill-reads-gold' : 'text-gray-200'} />
+            </button>
+          ))}
+        </div>
+        <textarea className="reads-input resize-none" rows={4} placeholder="Tell us about your experience (optional)"
+          value={comment} onChange={(e) => setComment(e.target.value)} />
+        <button onClick={submit} disabled={loading} className="reads-btn-primary w-full flex items-center justify-center gap-2">
+          {loading && <Loader2 size={16} className="animate-spin" />} Submit Rating
+        </button>
+      </div>
+    </Modal>
+  );
+}
+
+// ── School message row ────────────────────────────────────────────────────────
+const MessageRow = ({ m }) => (
+  <div className="py-3 border-b border-gray-50 last:border-0">
+    <div className="flex items-center justify-between">
+      <p className="text-reads-navy font-bold text-sm">{m.title}</p>
+      <span className="text-reads-muted-light text-[10px] flex-shrink-0">
+        {m.created_at ? new Date(m.created_at).toLocaleDateString() : ''}
+      </span>
+    </div>
+    {m.sender_name && <p className="text-reads-muted-light text-[10px]">From {m.sender_name}</p>}
+    <p className="text-reads-muted text-xs mt-1 leading-snug">{m.body}</p>
   </div>
 );
 
@@ -193,10 +284,13 @@ function MySchool({ user, tokenBalance, onBalanceUpdate }) {
   const [timetable, setTimetable] = useState([]);
   const [subjects, setSubjects] = useState([]);
   const [assignments, setAssignments] = useState([]);
+  const [messages, setMessages] = useState([]);
   const [continueLesson, setContinueLesson] = useState(null);
   const [loading, setLoading] = useState(true);
   const [showJoin, setShowJoin] = useState(false);
   const [showRecover, setShowRecover] = useState(false);
+  const [showRate, setShowRate] = useState(false);
+  const [submittingFor, setSubmittingFor] = useState(null);
   const [recoverCode, setRecoverCode] = useState('');
   const [recoverLoading, setRecoverLoading] = useState(false);
   const [toast, setToast] = useState(null);
@@ -212,13 +306,14 @@ function MySchool({ user, tokenBalance, onBalanceUpdate }) {
       const data = await api.school.getProfile();
       setProfile(data);
       if (data?.status === 'enrolled') {
-        const [feesRes, snapRes, ttRes, subRes, asgRes, lessonRes] = await Promise.allSettled([
+        const [feesRes, snapRes, ttRes, subRes, asgRes, lessonRes, msgRes] = await Promise.allSettled([
           api.students.getMyFees(),
           api.students.getAcademicSnapshot(),
           api.students.getTimetable(),
           api.students.getMySubjects(),
           api.students.getAssignments(),
           api.lessons.list({ limit: 1 }),
+          api.students.getSchoolMessages(),
         ]);
         if (feesRes.status === 'fulfilled') setFees(feesRes.value?.fees || []);
         if (snapRes.status === 'fulfilled') setSnapshot(snapRes.value || null);
@@ -226,6 +321,7 @@ function MySchool({ user, tokenBalance, onBalanceUpdate }) {
         if (subRes.status === 'fulfilled') setSubjects(subRes.value?.subjects || []);
         if (asgRes.status === 'fulfilled') setAssignments(asgRes.value?.assignments || []);
         if (lessonRes.status === 'fulfilled') setContinueLesson((lessonRes.value?.lessons || [])[0] || null);
+        if (msgRes.status === 'fulfilled') setMessages(msgRes.value?.messages || []);
       }
     } catch (_) { setProfile({ status: 'none' }); }
     setLoading(false);
@@ -464,10 +560,20 @@ function MySchool({ user, tokenBalance, onBalanceUpdate }) {
           </div>
         ) : (
           <div className="reads-card px-4">
-            {assignments.map((a) => <AssignmentRow key={a.id} a={a} />)}
+            {assignments.map((a) => <AssignmentRow key={a.id} a={a} onSubmit={setSubmittingFor} />)}
           </div>
         )}
       </div>
+
+      {/* Messages from my school */}
+      {messages.length > 0 && (
+        <div>
+          <p className="font-black text-reads-navy text-sm mb-2">Messages</p>
+          <div className="reads-card px-4">
+            {messages.slice(0, 5).map((m) => <MessageRow key={m.id} m={m} />)}
+          </div>
+        </div>
+      )}
 
       {/* Fees & Payments */}
       <div>
@@ -540,8 +646,11 @@ function MySchool({ user, tokenBalance, onBalanceUpdate }) {
         </div>
       )}
 
-      {/* Leave school */}
-      <div className="reads-card px-4 py-3">
+      {/* Rate & Leave school */}
+      <div className="reads-card px-4 py-3 flex items-center justify-between">
+        <button onClick={() => setShowRate(true)} className="text-reads-navy text-sm font-semibold flex items-center gap-1.5 py-1">
+          <Star size={14} className="text-reads-gold" /> Rate Your School
+        </button>
         <button
           onClick={async () => {
             if (!confirm('Leave this school? You will lose access to school lessons and results.')) return;
@@ -555,6 +664,16 @@ function MySchool({ user, tokenBalance, onBalanceUpdate }) {
           Leave School
         </button>
       </div>
+
+      {submittingFor && (
+        <SubmitAssignmentModal
+          assignment={submittingFor}
+          onClose={() => setSubmittingFor(null)}
+          onSubmitted={load}
+          showToast={showToast}
+        />
+      )}
+      {showRate && <RateSchoolModal onClose={() => setShowRate(false)} showToast={showToast} />}
 
       {toast && <Toast message={toast.msg} type={toast.type} onClose={() => setToast(null)} />}
     </div>

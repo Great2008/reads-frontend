@@ -37,6 +37,19 @@ const LessonCard = ({ lesson, onClick }) => (
   </button>
 );
 
+// Leaderboard row — "This Week" points ranking
+const LeaderboardRow = ({ entry, rank, isMe }) => (
+  <div className={`flex items-center gap-3 py-2.5 px-2 rounded-xl ${isMe ? 'bg-reads-green-bg' : ''}`}>
+    <span className={`w-5 text-center text-xs font-black ${rank <= 3 ? 'text-reads-gold-dark' : 'text-reads-muted'}`}>{rank}</span>
+    <img src={entry.avatar_url || `https://api.dicebear.com/8.x/initials/svg?seed=${encodeURIComponent(entry.full_name || 'U')}&backgroundColor=16a34a&fontColor=ffffff`}
+      className="w-8 h-8 rounded-lg flex-shrink-0" alt="" />
+    <span className={`flex-1 text-sm truncate ${isMe ? 'font-black text-reads-green' : 'font-semibold text-reads-navy'}`}>
+      {isMe ? 'You' : entry.full_name}
+    </span>
+    <span className="text-reads-navy text-sm font-black">{(entry.points ?? 0).toLocaleString()} pts</span>
+  </div>
+);
+
 // "Pick up where you stopped" — the feature card the mockup leads with
 const ContinueLearningCard = ({ lesson, onClick }) => (
   <div className="reads-card p-4">
@@ -108,23 +121,26 @@ export default function Dashboard({ user, wallet, onNavigate }) {
   const [stats, setStats] = useState({ lessons_completed: 0, quizzes_taken: 0, streak: 0 });
   const [badgeCount, setBadgeCount] = useState(0);
   const [recommendations, setRecommendations] = useState([]);
+  const [leaderboard, setLeaderboard] = useState(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     const load = async () => {
       try {
-        const [lessonRes, txRes, statsRes, achievementsRes, recsRes] = await Promise.allSettled([
+        const [lessonRes, txRes, statsRes, achievementsRes, recsRes, lbRes] = await Promise.allSettled([
           api.lessons.list({ limit: 5 }),
           api.wallet.getTransactions({ limit: 5 }),
           api.profile.getStats(),
           api.profile.getAchievements(),
           api.aiTutor.getRecommendations(),
+          api.students.getLeaderboard(),
         ]);
         if (lessonRes.status === 'fulfilled') setRecentLessons(lessonRes.value?.lessons || []);
         if (txRes.status === 'fulfilled') setRecentTxs(txRes.value?.transactions || []);
         if (statsRes.status === 'fulfilled') setStats(statsRes.value || stats);
         if (achievementsRes.status === 'fulfilled') setBadgeCount((achievementsRes.value?.achievements || []).length);
         if (recsRes.status === 'fulfilled') setRecommendations((recsRes.value?.recommendations || []).slice(0, 3));
+        if (lbRes.status === 'fulfilled') setLeaderboard(lbRes.value?.entries || null);
       } catch (_) {}
       setLoading(false);
     };
@@ -237,6 +253,22 @@ export default function Dashboard({ user, wallet, onNavigate }) {
           <div className="reads-card px-4 divide-y divide-gray-50">
             {recommendations.map((r) => (
               <RecommendationRow key={r.id} rec={r} onClick={() => onNavigate('ai-tutor')} />
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* Leaderboard — This Week */}
+      {leaderboard && leaderboard.length > 0 && (
+        <div>
+          <div className="flex items-center justify-between mb-3">
+            <h2 className="font-black text-reads-navy text-base">Leaderboard</h2>
+            <span className="text-reads-muted text-xs font-semibold">This Week</span>
+          </div>
+          <div className="reads-card px-3 py-1">
+            {leaderboard.slice(0, 5).map((entry, i) => (
+              <LeaderboardRow key={entry.user_id || i} entry={entry} rank={i + 1}
+                isMe={entry.is_me || entry.user_id === user?.id} />
             ))}
           </div>
         </div>

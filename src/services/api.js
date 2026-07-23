@@ -189,6 +189,21 @@ export const students = {
     return get(`/students/assignments${q ? '?' + q : ''}`);
   },
   // Expected shape: { assignments: [{ id, title, subject, due_date, status }] }
+
+  // TODO(backend): assignment submission — not built yet.
+  submitAssignment: (assignmentId, data) => post(`/students/assignments/${assignmentId}/submit`, data),
+
+  // TODO(backend): messages a school sends to its students — not built yet.
+  // Expected shape: { messages: [{ id, title, body, sender_name, created_at }] }
+  getSchoolMessages: () => get('/students/school-messages'),
+
+  // TODO(backend): learner rates/reviews their own school — not built yet.
+  rateSchool: (rating, comment) => post('/students/rate-school', { rating, comment }),
+
+  // TODO(backend): general weekly points leaderboard for the Home screen — not
+  // built yet (distinct from tournament.getLeaderboard, which needs a tournament id).
+  // Expected shape: { entries: [{ user_id, full_name, avatar_url, points }], scope: 'week' }
+  getLeaderboard: () => get('/students/leaderboard'),
 };
 
 // ── Notifications ─────────────────────────────────────────────────────────────
