@@ -3,7 +3,7 @@ import {
   Coins, ArrowUpRight, ArrowDownLeft, Send, RefreshCw,
   Copy, CheckCircle, Loader2, ExternalLink, Wallet,
   Link, LinkIcon, Unlink, ChevronDown, ChevronUp, AlertCircle,
-  Gift, Smartphone, Wifi, Tag, Star, Flame, Shield, TrendingUp, TrendingDown,
+  Gift, Smartphone, Wifi, Tag, Star, Flame, Shield, TrendingUp, TrendingDown, Download,
 } from 'lucide-react';
 import { api } from '../../services/api.js';
 import { LoadingOverlay, EmptyState, Modal, Toast } from '../../components/UI.jsx';
@@ -107,6 +107,23 @@ const SendModal = ({ balance, onClose, onSent }) => {
     </Modal>
   );
 };
+
+// ── Receive Modal — shows the learner's own receiving identifier ─────────────
+const ReceiveModal = ({ email, onClose, showToast }) => (
+  <Modal title="Receive $READS" onClose={onClose}>
+    <div className="text-center py-2">
+      <p className="text-reads-muted text-sm mb-4">Share this with anyone sending you $READS.</p>
+      <div className="bg-reads-green-bg rounded-2xl p-4 mb-4">
+        <p className="font-black text-reads-navy text-base break-all">{email || '—'}</p>
+      </div>
+      <button
+        onClick={() => { navigator.clipboard.writeText(email || ''); showToast('Copied to clipboard!'); }}
+        className="reads-btn-primary w-full">
+        Copy
+      </button>
+    </div>
+  </Modal>
+);
 
 // ── Cardano Wallet Section ────────────────────────────────────────────────────
 const CardanoSection = ({ linkedAddress, onLinked, onUnlinked, showToast }) => {
@@ -663,6 +680,8 @@ export default function WalletModule({ balance: initialBalance, onUpdateBalance 
   const [loading, setLoading]           = useState(true);
   const [txFilter, setTxFilter]         = useState('all');
   const [showSend, setShowSend]         = useState(false);
+  const [showReceive, setShowReceive]   = useState(false);
+  const [userEmail, setUserEmail]       = useState('');
   const [cardanoAddress, setCardano]    = useState('');
   const [streak, setStreak]             = useState(0);
   const [walletStats, setWalletStats]   = useState(null); // from api.wallet.getStats(), once backend supports it
@@ -699,6 +718,7 @@ export default function WalletModule({ balance: initialBalance, onUpdateBalance 
         if (me.status === 'fulfilled' && me.value?.cardano_address) {
           setCardano(me.value.cardano_address);
         }
+        if (me.status === 'fulfilled' && me.value?.email) setUserEmail(me.value.email);
         if (pStats.status === 'fulfilled') setStreak(pStats.value?.streak ?? 0);
         if (wStats.status === 'fulfilled') setWalletStats(wStats.value); // backend not live yet in most envs — falls back below
       } catch (_) {}
@@ -750,10 +770,14 @@ export default function WalletModule({ balance: initialBalance, onUpdateBalance 
             <span className="font-black text-reads-gold text-4xl">{balance.toLocaleString()}</span>
             <span className="text-reads-muted-light font-semibold text-sm pb-1">$READS</span>
           </div>
-          <div className="flex gap-3">
+          <div className="flex gap-2">
             <button onClick={() => setShowSend(true)}
               className="flex-1 bg-reads-gold text-reads-navy font-bold text-sm rounded-2xl py-3 flex items-center justify-center gap-1.5 active:scale-95 transition-transform">
               <Send size={16} /> Send
+            </button>
+            <button onClick={() => setShowReceive(true)}
+              className="flex-1 bg-white/10 text-white font-bold text-sm rounded-2xl py-3 flex items-center justify-center gap-1.5 active:scale-95 transition-transform">
+              <Download size={16} /> Receive
             </button>
             <button onClick={() => showToast('Fiat conversion is coming soon.', 'info')}
               className="flex-1 bg-white/10 text-white font-bold text-sm rounded-2xl py-3 flex items-center justify-center gap-1.5 active:scale-95 transition-transform">
@@ -853,6 +877,9 @@ export default function WalletModule({ balance: initialBalance, onUpdateBalance 
 
       {showSend && (
         <SendModal balance={balance} onClose={() => setShowSend(false)} onSent={handleSent} />
+      )}
+      {showReceive && (
+        <ReceiveModal email={userEmail} onClose={() => setShowReceive(false)} showToast={showToast} />
       )}
       {toast && <Toast message={toast.msg} type={toast.type} onClose={() => setToast(null)} />}
     </div>

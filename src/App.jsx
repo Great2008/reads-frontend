@@ -31,7 +31,7 @@ import TournamentModule     from './modules/tournament/TournamentModule.jsx';
 import HelpModule           from './modules/help/HelpModule.jsx';
 import ContactModule        from './modules/contact/ContactModule.jsx';
 import AdminModule          from './modules/admin/AdminModule.jsx';
-import PartnerModule        from './modules/partner/PartnerModule.jsx';
+import PartnerModule        from './modules/partner/school/PartnerModule.jsx';
 
 // ─────────────────────────────────────────────
 // Claim page error boundary + loading fallback
